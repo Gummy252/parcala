@@ -11,4 +11,4 @@ sayfa = ('<!doctype html><html lang="tr"><head><meta charset="utf-8">'
          '<meta name="viewport" content="width=device-width,initial-scale=1">'
          '</head><body>' + govde + '</body></html>')
 open(os.path.join(k, '..', 'index.html'), 'w', encoding='utf-8').write(sayfa)
-print('index.html yazıldı', len(sayfa))
+print('index.html hazir:', len(sayfa), 'bayt')

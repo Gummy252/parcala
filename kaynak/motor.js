@@ -674,7 +674,8 @@ function parcalaMotoru() {
     const E = eksen(k.nokta, k.normal);
     const yeniUst = k.yeniUst !== false;
     const al = k.alan || null; const tb = al ? tabanSekli(al) : null;
-    const K = k.duvar || 20, yan = ayar.boslukYan, d = al ? Math.max(0, al.kayma || 0) : 0;
+    // al.kayma işaretli: + ise alan dışındaki düzlem normal yönünde (yukarı), - ise ters yönde kayar
+    const K = k.duvar || 20, yan = ayar.boslukYan, d = al ? Math.abs(al.kayma || 0) : 0, isaret = al && al.kayma < 0 ? -1 : 1;
     if (al) {
       const C = [E.O[0] + E.u[0] * (al.kaydirU || 0) + E.v[0] * (al.kaydirV || 0), E.O[1] + E.u[1] * (al.kaydirU || 0) + E.v[1] * (al.kaydirV || 0), E.O[2] + E.u[2] * (al.kaydirU || 0) + E.v[2] * (al.kaydirV || 0)];
       ({ V, F } = incelt(V, F, C, tb.kapsam + d + 3, Math.max(0.25, Math.min(1.0, tb.kapsam / 12))));
@@ -695,8 +696,7 @@ function parcalaMotoru() {
     }
     // alan dışı basamak: yeni parça tarafına doğru en fazla d kadar
     const basamak = kay => (u, v) => al ? Math.min(d, K * Math.max(0, tb.sd(u, v) - kay)) : 0;
-    const isaret = yeniUst ? 1 : -1;
-    const bU = basamak(yeniUst ? 0 : yan), bA = basamak(yeniUst ? yan : 0);
+    const bU = basamak(isaret > 0 ? 0 : yan), bA = basamak(isaret > 0 ? yan : 0);
     const gYap = (ter, b) => (u, v) => { let s = isaret * b(u, v); for (const [cu, cv, r, dz] of ter) s += dz * adimF(u, v, cu, cv, r, GECIS); return s; };
     const acici = kay => !al ? null : (u, v) => {
       const s = tb.sd(u, v) - kay; if (s <= 0) return [u, v];
@@ -704,8 +704,8 @@ function parcalaMotoru() {
       const m = Math.min(d, K * s); return [u + m * gx / l, v + m * gy / l];
     };
     const h = k.izgara || ayar.izgara;
-    const ustP = guvenliKes(V, F, E, gYap(tu, bU), true, h, ou.length ? ou : null, ou.length ? 0.06 : 0, acici(yeniUst ? 0 : yan));
-    const altP = guvenliKes(V, F, E, gYap(ta, bA), false, h, oa.length ? oa : null, oa.length ? 0.06 : 0, acici(yeniUst ? yan : 0));
+    const ustP = guvenliKes(V, F, E, gYap(tu, bU), true, h, ou.length ? ou : null, ou.length ? 0.06 : 0, acici(isaret > 0 ? 0 : yan));
+    const altP = guvenliKes(V, F, E, gYap(ta, bA), false, h, oa.length ? oa : null, oa.length ? 0.06 : 0, acici(isaret > 0 ? yan : 0));
     return { ust: ustP, alt: altP, pim };
   }
 

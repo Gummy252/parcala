@@ -153,7 +153,7 @@ function isciAna(M, gonder) {
               const tip = k.pim === 'dubel' ? 'dubel' : ((k.pim === 'yeni') === yeniUst ? 'ust_erkek' : 'alt_erkek');
               pim = { tip, cap: k.pimCap, boy: k.pimBoy };
             }
-            const alan = k.alanSekil && k.alanSekil !== 'tum' ? { sekil: k.alanSekil, en: k.alanEn, boy: k.alanSekil === 'daire' ? k.alanEn : k.alanBoy, aci: 0, kaydirU: k.alanU || 0, kaydirV: k.alanV || 0, kayma: k.alanKayma } : null;
+            const alan = k.alanHazir || null;
             const r = M.duzKes(src.V, src.F, { nokta, normal: nrm, pim, alan, yeniUst: k.yeniTaraf === 'ust' }, ayar);
             const yeni = k.yeniTaraf === 'ust' ? r.ust : r.alt, kalan = k.yeniTaraf === 'ust' ? r.alt : r.ust;
             if (!yeni || !kalan) throw new Error(`"${k.ad}": kesim düzlemi hedef parçayı kesmiyor. Konumu değiştir.`);
@@ -353,7 +353,7 @@ const yuvarla = (x, n = 2) => +(+x).toFixed(n);
 function yeniKesim(tip) {
   const id = 'k' + (++D.sayac); const b = D.model ? D.model.hi : [100, 100, 100];
   const renk = ['kirmizi', 'mavi', 'turuncu', 'yesil', 'sari', 'mor', 'siyah'][(D.kesimler.length) % 7];
-  if (tip === 'duz') return { id, tip, ad: 'Parça ' + D.sayac, renk, hedef: 'model', eksen: 'z', konum: yuvarla(b[2] * 0.75, 1), yeniTaraf: 'ust', pim: 'dubel', pimCap: 4, pimBoy: 8, alanSekil: 'tum', alanEn: 20, alanBoy: 20, alanKayma: 10, alanU: null, alanV: null };
+  if (tip === 'duz') return { id, tip, ad: 'Parça ' + D.sayac, renk, hedef: 'model', eksen: 'z', konum: yuvarla(b[2] * 0.75, 1), yeniTaraf: 'ust', pim: 'dubel', pimCap: 4, pimBoy: 8, alanSekil: 'oto', alanEn: 20, alanBoy: 20, alanKayma: 10, alanU: null, alanV: null };
   return { id, tip, ad: 'Parça ' + D.sayac, renk, hedef: 'model', nokta: null, yonMod: 'yuzey', yuzeyNormali: null, yon: null, sekil: 'elips', en: 12, boy: 15, aci: 0, kaydirU: 0, kaydirV: 0, derinlik: 2.5, duvar: 10, icPay: 0.15, anahtar: true };
 }
 function hedefSecenekleri(k) {
@@ -397,11 +397,17 @@ function kesimHTML(k, i) {
       g += secim('pm_' + k.id, 'Bağlantı', k.pim, [['dubel', 'Ayrı basılan pim (dübel)'], ['yeni', 'Yeni parçada çıkıntı'], ['kalan', 'Kalan parçada çıkıntı'], ['yok', 'Pim yok']], true);
       if (k.pim !== 'yok') { g += sayiAlan('pc_' + k.id, 'Pim çapı (mm)', k.pimCap, 1.5, 12, 0.1); g += sayiAlan('pb_' + k.id, 'Pim boyu (mm)', k.pimBoy, 2, 30, 0.1); }
       const sinirli = k.alanSekil && k.alanSekil !== 'tum';
-      g += secim('as_' + k.id, 'Kesim alanı', k.alanSekil || 'tum', [['tum', 'Modelin tamamı'], ['daire', 'Daire içinde'], ['elips', 'Elips içinde'], ['dikdortgen', 'Dikdörtgen içinde']], true);
-      if (sinirli) {
+      g += secim('as_' + k.id, 'Kesim alanı', k.alanSekil || 'tum', [['oto', 'Otomatik: yalnızca ortadaki parça'], ['tum', 'Modelin tamamı'], ['daire', 'Daire içinde (elle)'], ['elips', 'Elips içinde (elle)'], ['dikdortgen', 'Dikdörtgen içinde (elle)']], true);
+      if (k.alanSekil === 'oto' && D.model) {
+        const o = otoAlan(k);
+        g += `<div class="tam bilgi">${o.yok ? 'Bu yükseklikte model yok.' : o.ada <= 1 ? 'Kesitte tek parça var; tüm kesit kesilir.' : `Kesitte ${o.ada} ayrı bölge var. Yalnızca ${k.tikNokta ? 'tıkladığın' : 'en büyük'} bölge kesilir (Ø<span class="sayi">${o.cap.toFixed(1)}</span> mm); diğerleri (kanat vb.) kesilmez; onların <span class="sayi">${Math.abs(o.kayma).toFixed(1)}</span> mm ${o.kayma < 0 ? 'altından' : 'üstünden'} dolaşılır. Başka bölgeyi seçmek için ona tıkla.`}</div>`;
+        if (!o.yok && o.ada > 1) g += `<div class="tam"><button type="button" class="btn kucuk" id="ael_${k.id}">Elle ayarla</button></div>`;
+      }
+      if (sinirli && k.alanSekil !== 'oto') {
         g += sayiAlan('ae_' + k.id, k.alanSekil === 'daire' ? 'Alan çapı (mm)' : 'Alan eni (mm)', k.alanEn, 1, 300, 0.1, 'tam');
         if (k.alanSekil !== 'daire') g += sayiAlan('ab_' + k.id, 'Alan boyu (mm)', k.alanBoy, 1, 300, 0.1, 'tam');
-        g += sayiAlan('ak_' + k.id, (k.yeniTaraf === 'ust' ? 'Alan dışında kesim ne kadar yukarıdan devam etsin' : 'Alan dışında kesim ne kadar aşağıdan devam etsin') + ' (mm)', k.alanKayma, 0, 200, 0.1, 'tam');
+        g += secim('ay_' + k.id, 'Alan dışında kesim', k.alanYon || 'asagi', [['asagi', k.eksen === 'z' ? 'Aşağıdan dolaşsın (çıkıntılar alttaysa)' : 'Negatif taraftan dolaşsın'], ['yukari', k.eksen === 'z' ? 'Yukarıdan dolaşsın (çıkıntılar üstteyse)' : 'Pozitif taraftan dolaşsın']], true);
+        g += sayiAlan('ak_' + k.id, 'Ne kadar uzaktan (mm) · kanat uçlarını geçecek kadar', k.alanKayma, 0, 200, 0.1, 'tam');
         g += `<div class="tam bilgi">Alanın dışındaki çıkıntılar (kanat gibi) kesilmez. Kaydırıcıyla kanatların altına inecek kadar aç; model canlı boyanır.</div>`;
         g += `<details class="tam"><summary>Alan merkezini kaydır</summary><div class="izgara" style="grid-template-columns:1fr 1fr">${sayiAlan('au_' + k.id, k.eksen === 'z' ? 'X (mm)' : 'Yatay (mm)', yuvarla(k.alanU || 0, 2), -500, 500, 0.05)}${sayiAlan('av_' + k.id, k.eksen === 'z' ? 'Y (mm)' : 'Dikey (mm)', yuvarla(k.alanV || 0, 2), -500, 500, 0.05)}<div class="tam"><button type="button" class="btn kucuk" id="ao_${k.id}">Kesitin ortasına al</button></div></div></details>`;
       }
@@ -511,13 +517,15 @@ function baglaPanel() {
   if (k.tip === 'duz') {
     e('ek_' + k.id).onchange = ev => { k.eksen = ev.target.value; const ix = 'xyz'.indexOf(k.eksen); k.konum = yuvarla((D.model.lo[ix] + D.model.hi[ix]) / 2, 1); panelCiz(); onizleme(); };
     e('yt_' + k.id).onchange = ev => yaz('yeniTaraf', ev.target.value);
-    baglaSayi('kn_' + k.id, v => { k.konum = v; if (!k.alanElle && k.alanSekil !== 'tum') alanOrtala(k); onizleme(); });
+    baglaSayi('kn_' + k.id, v => { k.konum = v; if (!k.alanElle && k.alanSekil !== 'tum' && k.alanSekil !== 'oto') alanOrtala(k); onizleme(); clearTimeout(k._pz); if (k.alanSekil === 'oto') k._pz = setTimeout(() => { if (D.secili === k.id) panelCiz(); }, 350); });
     e('as_' + k.id).onchange = ev => { k.alanSekil = ev.target.value; if (k.alanSekil !== 'tum' && k.alanU == null) alanOrtala(k); panelCiz(); onizleme(); };
     if (e('ae_' + k.id)) baglaSayi('ae_' + k.id, v => yaz('alanEn', v));
     if (e('ab_' + k.id)) baglaSayi('ab_' + k.id, v => yaz('alanBoy', v));
     if (e('ak_' + k.id)) baglaSayi('ak_' + k.id, v => yaz('alanKayma', v));
     if (e('au_' + k.id)) baglaSayi('au_' + k.id, v => { k.alanElle = true; yaz('alanU', v); });
     if (e('av_' + k.id)) baglaSayi('av_' + k.id, v => { k.alanElle = true; yaz('alanV', v); });
+    if (e('ael_' + k.id)) e('ael_' + k.id).onclick = () => { const o = otoAlan(k); Object.assign(k, { alanSekil: 'daire', alanEn: yuvarla(o.cap, 1), alanKayma: Math.abs(o.kayma), alanYon: o.kayma < 0 ? 'asagi' : 'yukari', alanU: yuvarla(o.u, 2), alanV: yuvarla(o.v, 2), alanElle: true }); panelCiz(); onizleme(); };
+    if (e('ay_' + k.id)) e('ay_' + k.id).onchange = ev => yaz('alanYon', ev.target.value);
     if (e('ao_' + k.id)) e('ao_' + k.id).onclick = () => { k.alanElle = false; alanOrtala(k); panelCiz(); onizleme(); };
     e('pm_' + k.id).onchange = ev => yaz('pim', ev.target.value, true);
     if (e('pc_' + k.id)) baglaSayi('pc_' + k.id, v => yaz('pimCap', v));
@@ -544,6 +552,67 @@ function alanOrtala(k) {
   const E = duzEksen(k); const c = yardimci.kesitMerkezi(D.model.V, D.model.F, E);
   if (c) { const q = v3.cik(c, E.O); k.alanU = yuvarla(v3.d(q, E.u), 2); k.alanV = yuvarla(v3.d(q, E.v), 2); } else { k.alanU = 0; k.alanV = 0; }
 }
+// Otomatik kesim alanı: kesitteki ayrı adaları bul, ortadakini (ya da tıklananı) al,
+// alan dışındaki çıkıntıların (kanat vb.) yeni parça tarafında ne kadar uzandığını ölç.
+function otoAlan(k) {
+  const anahtar = [k.eksen, k.konum, k.yeniTaraf, k.tikNokta ? k.tikNokta.join(',') : ''].join('|');
+  if (k._oto && k._oto.anahtar === anahtar) return k._oto;
+  const E = duzEksen(k); const V = D.model.V, F = D.model.F; const n = V.length / 3;
+  const w = new Float32Array(n); for (let i = 0; i < n; i++) w[i] = (V[3 * i] - E.O[0]) * E.w[0] + (V[3 * i + 1] - E.O[1]) * E.w[1] + (V[3 * i + 2] - E.O[2]) * E.w[2];
+  const kenar = new Map(); const PU = [], PV = [], ata = [];
+  const bul = x => { while (ata[x] !== x) { ata[x] = ata[ata[x]]; x = ata[x]; } return x; };
+  const id = (a, b) => {
+    const key = a < b ? a * n + b : b * n + a; let i = kenar.get(key); if (i !== undefined) return i;
+    const t = w[a] / (w[a] - w[b]); const x = V[3 * a] + (V[3 * b] - V[3 * a]) * t, y = V[3 * a + 1] + (V[3 * b + 1] - V[3 * a + 1]) * t, z = V[3 * a + 2] + (V[3 * b + 2] - V[3 * a + 2]) * t;
+    const q = [x - E.O[0], y - E.O[1], z - E.O[2]]; i = PU.length; PU.push(v3.d(q, E.u)); PV.push(v3.d(q, E.v)); ata.push(i); kenar.set(key, i); return i;
+  };
+  for (let t = 0; t < F.length; t += 3) {
+    const ids = []; for (let j = 0; j < 3; j++) { const a = F[t + j], b = F[t + (j + 1) % 3]; if ((w[a] > 0) !== (w[b] > 0)) ids.push(id(a, b)); }
+    if (ids.length === 2) { const ra = bul(ids[0]), rb = bul(ids[1]); if (ra !== rb) ata[ra] = rb; }
+  }
+  if (!PU.length) return (k._oto = { anahtar, yok: true });
+  const adalar = new Map();
+  for (let i = 0; i < PU.length; i++) { const r = bul(i); let a = adalar.get(r); if (!a) adalar.set(r, a = { su: 0, sv: 0, c: 0, idx: [] }); a.su += PU[i]; a.sv += PV[i]; a.c++; a.idx.push(i); }
+  let sec = null;
+  const liste = [...adalar.values()];
+  for (const a of liste) { a.u = a.su / a.c; a.v = a.sv / a.c; a.r = Math.max(...a.idx.map(i => Math.hypot(PU[i] - a.u, PV[i] - a.v))); }
+  if (k.tikNokta) { const q = v3.cik(k.tikNokta, E.O); const tu = v3.d(q, E.u), tv = v3.d(q, E.v); let en = Infinity; for (const a of liste) for (const i of a.idx) { const d = Math.hypot(PU[i] - tu, PV[i] - tv); if (d < en) { en = d; sec = a; } } }
+  else sec = liste.reduce((x, y) => (y.r * y.c > x.r * x.c ? y : x));
+  // seçilen adayı içine alan ama başka adaya değmeyen daire
+  // daire olabildiğince büyük: en yakın başka bölgeye kadar (seçilen parça kesitin altında/üstünde genişliyor olabilir)
+  let enYakin = Infinity;
+  for (const a of liste) if (a !== sec) for (const i of a.idx) enYakin = Math.min(enYakin, Math.hypot(PU[i] - sec.u, PV[i] - sec.v));
+  let R = Math.max(sec.r + 0.15, enYakin - 0.6);
+  // alan dışındaki malzemenin iki yöndeki uzanımı; düzlem, ilk boşluğun bulunduğu tarafa kaydırılır
+  const bosluk = s => {
+    const araliklar = [];
+    for (let t = 0; t < F.length; t += 3) {
+      const a = F[t], b = F[t + 1], c = F[t + 2];
+      const wa = s * w[a], wb = s * w[b], wc = s * w[c]; const mx = Math.max(wa, wb, wc); if (mx <= 0) continue;
+      let cu = 0, cv = 0; for (const p of [a, b, c]) { const q = [V[3 * p] - E.O[0], V[3 * p + 1] - E.O[1], V[3 * p + 2] - E.O[2]]; cu += v3.d(q, E.u); cv += v3.d(q, E.v); }
+      if (Math.hypot(cu / 3 - sec.u, cv / 3 - sec.v) <= R + 0.3) continue;
+      araliklar.push([Math.max(0, Math.min(wa, wb, wc)), mx]);
+    }
+    if (!araliklar.length) return 0.5;                       // bu tarafta dışarıda malzeme yok
+    araliklar.sort((x, y) => x[0] - y[0]);
+    if (araliklar[0][0] > 1.0) return Math.min(1.0, araliklar[0][0] / 2);
+    let son = 0;
+    for (const [a, b] of araliklar) { if (a - son > 1.0) return son + Math.min(1.5, (a - son) / 2); son = Math.max(son, b); }
+    return null;                                             // boşluk yok: malzeme sonuna kadar sürüyor
+  };
+  const asagi = bosluk(-1), yukari = bosluk(1);
+  let kayma;
+  if (asagi == null && yukari == null) kayma = 0;
+  else if (asagi == null) kayma = yukari;
+  else if (yukari == null) kayma = -asagi;
+  else kayma = (asagi > 0.6 || yukari > 0.6) ? (asagi >= yukari ? -asagi : yukari) : -asagi;
+  return (k._oto = { anahtar, u: sec.u, v: sec.v, cap: 2 * R, kayma: yuvarla(kayma, 2), ada: liste.length });
+}
+function duzAlan(k) {      // işçiye gidecek alan tanımı
+  if (!k.alanSekil || k.alanSekil === 'tum') return null;
+  if (k.alanSekil === 'oto') { const o = otoAlan(k); if (o.yok || o.ada <= 1) return null; return { sekil: 'daire', en: o.cap, boy: o.cap, aci: 0, kaydirU: o.u, kaydirV: o.v, kayma: o.kayma }; }
+  return { sekil: k.alanSekil, en: k.alanEn, boy: k.alanSekil === 'daire' ? k.alanEn : k.alanBoy, aci: 0, kaydirU: k.alanU || 0, kaydirV: k.alanV || 0, kayma: (k.alanYon === 'yukari' ? 1 : -1) * Math.abs(k.alanKayma) };
+}
 function cevre(sekil, en, boy, aci, du, dv) {
   const pts = []; const ca = Math.cos(aci * Math.PI / 180), sa = Math.sin(aci * Math.PI / 180);
   const ekle = (x, y) => pts.push([du + x * ca - y * sa, dv + x * sa + y * ca]);
@@ -568,11 +637,12 @@ function onizleme() {
     const sec = k.id === D.secili; if (!sec) continue;
     if (k.tip === 'duz') {
       const ix = 'xyz'.indexOf(k.eksen); const a = (ix + 1) % 3, b = (ix + 2) % 3; const pad = boy * 0.08;
-      if (k.alanSekil && k.alanSekil !== 'tum') {
-        const E = duzEksen(k); const sg = k.yeniTaraf === 'ust' ? 1 : -1;
+      const AL = duzAlan(k);
+      if (AL) {
+        const E = duzEksen(k); const sg = 1;
         const W = (u, v, w) => v3.top(v3.top(v3.top(E.O, v3.k(E.u, u)), v3.k(E.v, v)), v3.k(E.w, w));
-        const c = cevre(k.alanSekil, k.alanEn, k.alanSekil === 'daire' ? k.alanEn : k.alanBoy, 0, k.alanU || 0, k.alanV || 0);
-        const T = [], L = []; const cu = k.alanU || 0, cv = k.alanV || 0; const kd = sg * k.alanKayma;
+        const c = cevre(AL.sekil, AL.en, AL.boy, 0, AL.kaydirU, AL.kaydirV);
+        const T = [], L = []; const cu = AL.kaydirU, cv = AL.kaydirV; const kd = sg * AL.kayma;
         for (let i = 0; i < c.length; i++) {
           const [u0, v0] = c[i], [u1, v1] = c[(i + 1) % c.length];
           T.push(...W(cu, cv, 0), ...W(u0, v0, 0), ...W(u1, v1, 0));
@@ -629,10 +699,11 @@ function onizleme() {
 function kesimBolgesi(k) {        // nokta -> bu kesimin yeni parçasında mı?
   if (k.tip === 'duz') {
     const ix = 'xyz'.indexOf(k.eksen); const ust = k.yeniTaraf === 'ust';
-    if (!k.alanSekil || k.alanSekil === 'tum') return ust ? (p => p[ix] > k.konum) : (p => p[ix] < k.konum);
-    const E = duzEksen(k); const tb = yardimci.tabanSekli({ sekil: k.alanSekil, en: k.alanEn, boy: k.alanSekil === 'daire' ? k.alanEn : k.alanBoy, aci: 0, kaydirU: k.alanU || 0, kaydirV: k.alanV || 0 });
-    const d = k.alanKayma, K = 20;
-    return p => { const q = v3.cik(p, E.O); const w = v3.d(q, E.w); const lim = Math.min(d, K * Math.max(0, tb.sd(v3.d(q, E.u), v3.d(q, E.v)))); return ust ? w > lim : w < -lim; };
+    const AL = duzAlan(k);
+    if (!AL) return ust ? (p => p[ix] > k.konum) : (p => p[ix] < k.konum);
+    const E = duzEksen(k); const tb = yardimci.tabanSekli(AL);
+    const d = Math.abs(AL.kayma), sg = AL.kayma < 0 ? -1 : 1, K = 20;
+    return p => { const q = v3.cik(p, E.O); const w = v3.d(q, E.w); const lim = sg * Math.min(d, K * Math.max(0, tb.sd(v3.d(q, E.u), v3.d(q, E.v)))); return ust ? w > lim : w < lim; };
   }
   if (!k.nokta || !k.yon) return () => false;
   const E = yardimci.eksen(v3.cik(k.nokta, v3.k(k.yon, k.derinlik)), k.yon);
@@ -743,7 +814,7 @@ function ortalamaNormal(p, yuz, r) {
 function tikla(x, y) {
   if (D.mod !== 'duzen' || !D.model) return; const k = seciliKesim(); if (!k) return;
   const { o, d } = Gor.isin(x, y); const h = isinKesis(o, d); if (!h) return;
-  if (k.tip === 'duz') { k.konum = yuvarla(h.p['xyz'.indexOf(k.eksen)], 2); }
+  if (k.tip === 'duz') { k.konum = yuvarla(h.p['xyz'.indexOf(k.eksen)], 2); k.tikNokta = h.p; }
   else {
     k.nokta = h.p; k.yuzeyNormali = ortalamaNormal(h.p, h.yuz, Math.max(0.8, Math.min(k.en, k.boy || k.en) * 0.25)); k.yon = yonHesapla(k);
     // tıklanan nokta hangi parçada kalıyorsa ondan kes (biraz içeriden bak: yüzey tam sınırda olabilir)
@@ -781,7 +852,7 @@ async function calistir() {
   D.kesimler.forEach((k, i) => { if (k.tip === 'tikac' && k.nokta && k.yon && !k.hedefElle) k.hedef = parcaBul(v3.cik(k.nokta, v3.k(k.yon, Math.min(0.5, k.derinlik / 2))), i); });
   try {
     const adlar = { model: 'Ana gövde' }; D.kesimler.forEach(k => adlar[k.id] = k.ad);
-    const kesimler = D.kesimler.map(k => ({ ...k, hedefAd: adlar[k.hedef] }));
+    const kesimler = D.kesimler.map(k => { const c = { ...k, hedefAd: adlar[k.hedef] }; delete c._oto; if (k.tip === 'duz') c.alanHazir = duzAlan(k); return c; });
     const r = await is({ tip: 'kes', kesimler, ayar: D.ayar }, 'Parçalanıyor');
     D.sonuc = { liste: r.liste, pimler: r.pimler, modelKusur: r.modelKusur, anaAd: 'Gövde' };
     D.mod = 'sonuc'; panelCiz(); onizleme(); sonucCiz();
@@ -843,9 +914,9 @@ function ornekRoket() {
   return yardimci.stlYaz(Float64Array.from(V), Uint32Array.from(F));
 }
 const ornekKesimler = [
-  { id: 'k1', tip: 'duz', ad: 'Burun', renk: 'kirmizi', hedef: 'model', eksen: 'z', konum: 60, yeniTaraf: 'ust', pim: 'dubel', pimCap: 5, pimBoy: 10 },
+  { id: 'k1', tip: 'duz', ad: 'Burun', renk: 'kirmizi', hedef: 'model', eksen: 'z', konum: 60, yeniTaraf: 'ust', pim: 'dubel', pimCap: 5, pimBoy: 10, alanSekil: 'oto' },
   { id: 'k2', tip: 'tikac', ad: 'Pencere', renk: 'mavi', hedef: 'model', nokta: [0, -15, 42], yonMod: 'yuzey', yuzeyNormali: [0, -1, 0], yon: [0, -1, 0], sekil: 'daire', en: 11, boy: 11, aci: 0, kaydirU: 0, kaydirV: 0, derinlik: 3, duvar: 10, icPay: 0.15, anahtar: true },
-  { id: 'k3', tip: 'duz', ad: 'Motor', renk: 'turuncu', hedef: 'model', eksen: 'z', konum: 8, yeniTaraf: 'alt', pim: 'kalan', pimCap: 4, pimBoy: 4 },
+  { id: 'k3', tip: 'duz', ad: 'Motor', renk: 'turuncu', hedef: 'model', eksen: 'z', konum: 8, yeniTaraf: 'alt', pim: 'kalan', pimCap: 4, pimBoy: 4, alanSekil: 'oto' },
 ];
 
 if (!Gor) { panel.innerHTML = '<div class="not uyari">Bu tarayıcı 3B görüntülemeyi (WebGL2) desteklemiyor. Chrome, Edge veya Firefox\'un güncel sürümünü dene.</div>'; }

@@ -1,0 +1,49 @@
+name: Windows kurulum dosyası
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  derle:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Arayüzü kaynaktan oluştur
+        run: python kaynak/derle.py
+
+      - name: Bağımlılıkları kur
+        run: npm install
+
+      - name: Kurulum dosyasını üret
+        run: npm run dist
+
+      - name: Sürüm numarasını oku
+        id: surum
+        shell: bash
+        run: echo "v=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Parcala-Kurulum
+          path: dist/*.exe
+
+      - name: Sürüm sayfasına yükle
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.surum.outputs.v }}
+          name: Parçala ${{ steps.surum.outputs.v }}
+          body: |
+            Windows kurulum dosyası aşağıda: **Parcala-Kurulum-${{ steps.surum.outputs.v }}.exe**
+            İndir, çift tıkla, kur. İlk açılışta Windows "bilinmeyen yayıncı" derse: Ek bilgi > Yine de çalıştır.
+          files: dist/*.exe
+          make_latest: true

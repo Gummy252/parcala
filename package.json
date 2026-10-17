@@ -1,0 +1,42 @@
+{
+  "name": "parcala",
+  "productName": "Parçala",
+  "version": "0.2.0",
+  "description": "3D modelleri AMS olmadan renk renk basmak için parçalara ayırır",
+  "author": "Gummy252",
+  "license": "UNLICENSED",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "32.2.0",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "com.gummy252.parcala",
+    "productName": "Parçala",
+    "files": ["main.js", "preload.js", "index.html", "build/icon.ico"],
+    "directories": { "output": "dist", "buildResources": "build" },
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "build/icon.ico",
+      "artifactName": "Parcala-Kurulum-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Parçala",
+      "language": "1055",
+      "installerLanguages": ["tr_TR"]
+    },
+    "fileAssociations": [
+      { "ext": "stl", "name": "STL modeli", "role": "Editor" },
+      { "ext": "3mf", "name": "3MF modeli", "role": "Editor" }
+    ]
+  }
+}

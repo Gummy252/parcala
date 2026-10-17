@@ -87,6 +87,14 @@ input.alan[type=number]{font-family:var(--f-mono);font-variant-numeric:tabular-n
 .parca input.ad{border:none;background:transparent;font-weight:600;padding:2px 0;min-width:0;width:100%}
 .parca .renkler{grid-column:1/-1}
 details summary{cursor:pointer;font-size:12.5px;color:var(--muted)}
+.btn.nesne{justify-content:space-between;text-align:left;white-space:normal}
+.btn.nesne .ad{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.btn.nesne .sayi{font-family:var(--f-mono);font-size:12px;color:var(--muted);flex:none}
+.gorunumler{position:absolute;right:12px;bottom:12px;display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;max-width:calc(100% - 24px)}
+.gorunumler button{border:1px solid var(--line);background:color-mix(in srgb,var(--panel) 92%,transparent);border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer}
+.gorunumler button:hover{border-color:var(--muted)}
+.gorunumler button[aria-pressed=true]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.gorunumler .ayrac{width:1px;background:var(--line);margin:2px 2px}
 .kanat-adim{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--muted)}
 .kanat-adim div{display:flex;gap:8px;align-items:baseline}
 .kanat-adim b{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;border:1px solid var(--line);font-size:11px;flex:none}
@@ -119,6 +127,14 @@ kbd{font-family:var(--f-mono);font-size:11px;border:1px solid var(--line);border
       <canvas id="gl"></canvas>
       <div class="ipucu" id="ipucu"></div>
       <div class="eksenler" id="eksenler">Sürükle: döndür · Sağ tık/iki parmak: kaydır · Tekerlek: yakınlaş</div>
+      <div class="gorunumler" role="toolbar" aria-label="Görünüm">
+        <button type="button" data-gor="on" title="Önden (1)">Ön</button><button type="button" data-gor="arka" title="Arkadan (Ctrl+1)">Arka</button>
+        <button type="button" data-gor="sol" title="Soldan (Ctrl+3)">Sol</button><button type="button" data-gor="sag" title="Sağdan (3)">Sağ</button>
+        <button type="button" data-gor="ust" title="Üstten (7)">Üst</button><button type="button" data-gor="alt" title="Alttan (Ctrl+7)">Alt</button>
+        <button type="button" data-gor="izo" title="İzometrik (0)">İzo</button><span class="ayrac"></span>
+        <button type="button" id="ortoBtn" aria-pressed="false" title="Perspektifsiz görünüm: ölçüler bozulmaz (5)">Ortografik</button>
+        <button type="button" id="sigdirBtn" title="Modeli ekrana sığdır (F)">Sığdır</button>
+      </div>
       <div class="birak" id="birak" hidden>Modeli buraya bırak</div>
       <div class="ilerleme" id="ilerleme" hidden><b id="ilBas">Çalışıyor</b><div class="yazi" id="ilYazi"></div><div class="cubuk"><i id="ilCubuk"></i></div></div>
     </div>
@@ -317,7 +333,7 @@ function parcalaMotoru() {
     while ((m = rb.exec(metin))) { const a = attrs(m[1]); build.push({ id: a.objectid, M: matris(a.transform) }); }
     return { nesneler, build };
   }
-  async function ucmfOku(buf, ilerle) {
+  async function ucmfOku(buf, ilerle, secim) {
     const z = await zipAc(buf); const td = new TextDecoder(); const onbellek = new Map();
     async function model(yol) {
       if (onbellek.has(yol)) return onbellek.get(yol);
@@ -335,17 +351,23 @@ function parcalaMotoru() {
       while ((m = ro.exec(s))) {
         const g = m[2]; const parcalar = []; const rp = /<part id="(\d+)"[^>]*>([\s\S]*?)<\/part>/g; let p;
         const ex = /key="extruder" value="(\d+)"/.exec(g);
-        while ((p = rp.exec(g))) { const ad = /key="name" value="([^"]*)"/.exec(p[2]); const e = /key="extruder" value="(\d+)"/.exec(p[2]); parcalar.push({ ad: ad ? ad[1] : '', ext: e ? +e[1] : (ex ? +ex[1] : 1) }); }
-        ayar.set(m[1], { ext: ex ? +ex[1] : 1, parcalar });
+        while ((p = rp.exec(g))) { const ad = /key="name" value="([^"]*)"/.exec(p[2]); const e = /key="extruder" value="(\d+)"/.exec(p[2]); const tur = /subtype="([^"]*)"/.exec(p[0]); parcalar.push({ ad: ad ? ad[1] : '', ext: e ? +e[1] : (ex ? +ex[1] : 1), tur: tur ? tur[1] : 'normal_part' }); }
+        const oad = /key="name" value="([^"]*)"/.exec(g); const yuz = /face_count="(\d+)"/.exec(g);
+        ayar.set(m[1], { ext: ex ? +ex[1] : 1, parcalar, ad: oad ? oad[1] : '', yuz: yuz ? +yuz[1] : 0 });
       }
     }
+    // dosyadaki nesneler (plakadaki her öğe); seçim yapılmadıysa sadece liste döner
+    const liste = build.map((b, i) => { const a = ayar.get(b.id); return { i, id: b.id, ad: (a && a.ad) || ('Nesne ' + (i + 1)), yuz: a ? a.yuz : 0, renk: a ? a.ext : 1 }; });
+    if (secim === 'liste') return { liste };
+    const secilen = secim == null || secim === 'hepsi' ? build : build.filter((b, i) => secim.includes(i));
     const parcalar = [];
     async function gez(yol, id, M, ust, sira) {
       const { nesneler } = await model(yol); const n = nesneler.get(id); if (!n) return;
-      if (n.mesh) parcalar.push({ ad: n.ad, V: donustur(n.mesh.V, M), F: n.mesh.F, boya: n.mesh.boya, nesne: ust, sira });
-      let k = 0; for (const c of n.bilesen) await gez(c.yol ? c.yol.replace(/^\//, '') : yol, c.id, carp(M, c.M), ust, k++);
+      const a = ayar.get(ust); const tur = a && a.parcalar[sira] ? a.parcalar[sira].tur : 'normal_part';
+      if (n.mesh && tur === 'normal_part') parcalar.push({ ad: n.ad, V: donustur(n.mesh.V, M), F: n.mesh.F, boya: n.mesh.boya, nesne: ust, sira });
+      let k = 0; for (const c of n.bilesen) { const kk = k++; const ta = a && a.parcalar[kk] ? a.parcalar[kk].tur : 'normal_part'; if (ust === id && ta !== 'normal_part') continue; await gez(c.yol ? c.yol.replace(/^\//, '') : yol, c.id, carp(M, c.M), ust, kk); }
     }
-    for (const b of build) await gez(ana, b.id, b.M, b.id, 0);
+    for (const b of secilen) await gez(ana, b.id, b.M, b.id, 0);
     for (const p of parcalar) {
       const a = ayar.get(p.nesne); p.ext = 1;
       if (a) { p.ext = a.ext; if (a.parcalar[p.sira]) { p.ad = a.parcalar[p.sira].ad || p.ad; p.ext = a.parcalar[p.sira].ext; } }
@@ -863,12 +885,16 @@ function parcalaMotoru() {
   }
 
   // ================================================================ dosya yükleme (tam akış)
-  async function yukle(ad, buf, ilerle) {
+  async function yukle(ad, buf, ilerle, secim) {
     const uz = ad.toLowerCase().split('.').pop();
     let V, F, parcalar;
     if (uz === 'stl') { ilerle && ilerle('STL okunuyor'); ({ V, F } = stlOku(buf)); parcalar = [{ ad, ext: 1, boya: 0, nT: F.length / 3 }]; }
     else if (uz === '3mf') {
-      const ps = await ucmfOku(buf, ilerle);
+      if (secim == null) {
+        const { liste } = await ucmfOku(buf, null, 'liste');
+        if (liste.length > 1) return { secimGerek: true, liste };
+      }
+      const ps = await ucmfOku(buf, ilerle, secim);
       if (!ps.length) throw new Error('3MF içinde model bulunamadı');
       ilerle && ilerle('Parçalar birleştiriliyor');
       let nv = 0, nf = 0; for (const p of ps) { nv += p.V.length; nf += p.F.length; }
@@ -892,11 +918,14 @@ function parcalaMotoru() {
 'use strict';
 // ====================================================================== işçi (Web Worker)
 function isciAna(M, gonder) {
-  let model = null, sonuc = null;
+  let model = null, sonuc = null, bekleyen = null;
   return async function (msg) {
     try {
-      if (msg.tip === 'yukle') {
-        const r = await M.yukle(msg.ad, msg.buf, s => gonder({ tip: 'ilerle', yazi: s }));
+      if (msg.tip === 'yukle' || msg.tip === 'nesneSec') {
+        if (msg.tip === 'yukle') bekleyen = { ad: msg.ad, buf: msg.buf };
+        const r = await M.yukle(bekleyen.ad, bekleyen.buf, s => gonder({ tip: 'ilerle', yazi: s }), msg.secim);
+        if (r.secimGerek) { gonder({ tip: 'secim', liste: r.liste }); return; }
+        bekleyen = null;
         model = { V: r.V, F: r.F }; sonuc = null;
         gonder({ tip: 'ilerle', yazi: 'Kontrol ediliyor' });
         const { lo, hi } = M.sinirlar(r.V); const kap = M.kapaliMi(r.V, r.F);
@@ -1043,7 +1072,7 @@ const Gor = (() => {
     gl.bindVertexArray(null);
     return { vao, vb, ib, cb, renkli: false, n: F ? F.length : V.length / 3, sil() { gl.deleteBuffer(vb); gl.deleteBuffer(cb); if (ib) gl.deleteBuffer(ib); gl.deleteVertexArray(vao); } };
   }
-  const kam = { yaw: -1.15, pitch: 0.32, uzak: 200, hedef: [0, 0, 50], fov: 0.62 };
+  const kam = { yaw: -1.15, pitch: 0.32, uzak: 200, hedef: [0, 0, 50], fov: 0.62, orto: false };
   let govdeler = [], ustler = [], cizgiler = [], izgaraT = null, tabla = 200;
   function izgaraKur(boy) {
     if (izgaraT) izgaraT.sil();
@@ -1061,7 +1090,13 @@ const Gor = (() => {
     const cs = getComputedStyle(document.documentElement); const bg = rgb(cs.getPropertyValue('--stage').trim() || '#e3e7e1');
     gl.clearColor(bg[0], bg[1], bg[2], 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     const cp = Math.cos(kam.pitch); goz = [kam.hedef[0] + kam.uzak * cp * Math.cos(kam.yaw), kam.hedef[1] + kam.uzak * cp * Math.sin(kam.yaw), kam.hedef[2] + kam.uzak * Math.sin(kam.pitch)];
-    mvp = m4.carp(m4.persp(kam.fov, W / H, Math.max(0.5, kam.uzak / 200), kam.uzak * 20), m4.bak(goz, kam.hedef, [0, 0, 1]));
+    const yuk = Math.abs(kam.pitch) > 1.55 ? [-Math.cos(kam.yaw) * Math.sign(kam.pitch), -Math.sin(kam.yaw) * Math.sign(kam.pitch), 0] : [0, 0, 1];
+    let P;
+    if (kam.orto) {
+      const h = kam.uzak * Math.tan(kam.fov / 2), w = h * W / H, n = -kam.uzak * 20, f = kam.uzak * 20;
+      P = new Float32Array([1 / w, 0, 0, 0, 0, 1 / h, 0, 0, 0, 0, -2 / (f - n), 0, 0, 0, -(f + n) / (f - n), 1]);
+    } else P = m4.persp(kam.fov, W / H, Math.max(0.5, kam.uzak / 200), kam.uzak * 20);
+    mvp = m4.carp(P, m4.bak(goz, kam.hedef, yuk));
     gl.useProgram(pr); gl.uniformMatrix4fv(u.mvp, false, mvp); gl.uniform3fv(u.goz, goz);
     gl.enable(gl.DEPTH_TEST); gl.disable(gl.BLEND); gl.depthMask(true);
     gl.uniform1i(u.vrenk, 0);
@@ -1083,6 +1118,10 @@ const Gor = (() => {
   }
   return {
     kam, yenile, isin, rgb, izgaraKur,
+    bak(ad) {
+      const A = { on: [-Math.PI / 2, 0], arka: [Math.PI / 2, 0], sag: [0, 0], sol: [Math.PI, 0], ust: [-Math.PI / 2, Math.PI / 2], alt: [-Math.PI / 2, -Math.PI / 2], izo: [-Math.PI / 4, Math.atan(1 / Math.SQRT2)] }[ad];
+      if (!A) return; kam.yaw = A[0]; kam.pitch = A[1]; yenile();
+    },
     govdeAyarla(liste) { for (const g of govdeler) g.t.sil(); govdeler = liste.map(x => ({ ...x, t: tampon(x.V, x.F) })); yenile(); },
     govdeler: () => govdeler,
     renkVer(i, C) { const g = govdeler[i]; if (!g) return; gl.bindBuffer(gl.ARRAY_BUFFER, g.t.cb); gl.bufferData(gl.ARRAY_BUFFER, C, gl.DYNAMIC_DRAW); g.t.renkli = !!C; yenile(); },
@@ -1209,6 +1248,17 @@ function kesimHTML(k, i) {
 }
 function panelCiz() {
   const m = D.model; let h = '';
+  if (D.secimListesi) {
+    const s = D.secimListesi;
+    h = `<div class="bolum"><h2>Hangi nesneyi açalım?</h2><div class="bilgi">${esc(s.ad)} içinde ${s.liste.length} ayrı nesne var. Parçalamak istediğin nesneyi seç.</div>
+      ${s.liste.map(x => `<button type="button" class="btn nesne" data-nesne="${x.i}"><span class="ad">${esc(x.ad)}</span><span class="sayi">${x.yuz ? x.yuz.toLocaleString('tr-TR') + ' üçgen' : ''}</span></button>`).join('')}
+      <button type="button" class="btn" id="hepsiniAc">Hepsini birlikte aç</button>
+      <div class="not">Dosya zaten ayrı nesnelerden oluşuyorsa (örneğin her renk ayrı parça), bunları doğrudan Bambu Studio'da ayrı basabilirsin; parçalamaya gerek olmayabilir.</div></div>`;
+    panel.innerHTML = h;
+    panel.querySelectorAll('[data-nesne]').forEach(b => b.onclick = () => nesneAc([+b.dataset.nesne]));
+    $('#hepsiniAc').onclick = () => nesneAc('hepsi');
+    ipucuCiz(); return;
+  }
   if (D.mod === 'duzen') {
     h += `<div class="bolum"><h2>Model</h2>`;
     if (m) {
@@ -1600,6 +1650,20 @@ function sonucCiz() {
   new MutationObserver(() => { Gor.yenile(); onizleme(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 })();
 
+(() => {
+  if (!Gor) return;
+  document.querySelectorAll('[data-gor]').forEach(b => b.onclick = () => Gor.bak(b.dataset.gor));
+  const orto = $('#ortoBtn'); const ortoAyarla = v => { Gor.kam.orto = v; orto.setAttribute('aria-pressed', String(v)); Gor.yenile(); };
+  orto.onclick = () => ortoAyarla(!Gor.kam.orto);
+  $('#sigdirBtn').onclick = () => { if (D.model) { const o = Gor.kam.orto; Gor.sigdir(D.model.lo, D.model.hi); Gor.kam.orto = o; } };
+  document.addEventListener('keydown', e => {
+    if (/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement && document.activeElement.tagName)) return;
+    const c = e.ctrlKey || e.metaKey; const k = e.key;
+    if (k === '1') Gor.bak(c ? 'arka' : 'on'); else if (k === '3') Gor.bak(c ? 'sol' : 'sag'); else if (k === '7') Gor.bak(c ? 'alt' : 'ust');
+    else if (k === '0') Gor.bak('izo'); else if (k === '5') ortoAyarla(!Gor.kam.orto); else if (k === 'f' || k === 'F') $('#sigdirBtn').click(); else return;
+    e.preventDefault();
+  });
+})();
 function isinKesis(o, d) {
   const V = D.model.V, F = D.model.F; let en = Infinity, yuz = -1;
   for (let t = 0; t < F.length; t += 3) {
@@ -1654,10 +1718,23 @@ Motor.dinle(m => {
 });
 function is(mesaj, baslik, aktar) { return new Promise((coz, red) => { D.mesgul = true; D.hata = null; beklenen = { coz, red }; ilerleme.ac(baslik); Motor.gonder(mesaj, aktar); }); }
 
+async function nesneAc(secim) {
+  const s = D.secimListesi; D.secimListesi = null;
+  try {
+    const m = await is({ tip: 'nesneSec', secim }, 'Model açılıyor');
+    const ad = s.ad + (secim === 'hepsi' ? '' : ' · ' + s.liste.filter(x => secim.includes(x.i)).map(x => x.ad).join(', '));
+    $('#dosyaad').textContent = ad;
+    D.model = { ad: s.ad, V: m.V, F: m.F, lo: m.lo, hi: m.hi, parcalar: m.parcalar, kapali: m.kapali, hacim: m.hacim };
+    D.mod = 'duzen'; D.sonuc = null; pimMerkezOnbellek = new Map(); D.kesimler = []; D.secili = null; D.sayac = 0;
+    if (Gor) { Gor.sigdir(m.lo, m.hi); modelCiz(); }
+    panelCiz(); onizleme();
+  } catch (e) { panelCiz(); }
+}
 async function modelYukle(ad, buf, ornekKesimler) {
   $('#dosyaad').textContent = ad;
   try {
-    const m = await is({ tip: 'yukle', ad, buf }, 'Model açılıyor', [buf]);
+    let m = await is({ tip: 'yukle', ad, buf }, 'Model açılıyor', [buf]);
+    if (m.tip === 'secim') { D.secimListesi = { ad, liste: m.liste, ornekKesimler }; D.model = null; panelCiz(); return; }
     D.model = { ad, V: m.V, F: m.F, lo: m.lo, hi: m.hi, parcalar: m.parcalar, kapali: m.kapali, hacim: m.hacim };
     D.mod = 'duzen'; D.sonuc = null; pimMerkezOnbellek = new Map();
     D.kesimler = ornekKesimler || []; D.secili = D.kesimler[0] ? D.kesimler[0].id : null; D.sayac = D.kesimler.length;

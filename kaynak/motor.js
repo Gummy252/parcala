@@ -188,7 +188,7 @@ function parcalaMotoru() {
     while ((m = rb.exec(metin))) { const a = attrs(m[1]); build.push({ id: a.objectid, M: matris(a.transform) }); }
     return { nesneler, build };
   }
-  async function ucmfOku(buf, ilerle) {
+  async function ucmfOku(buf, ilerle, secim) {
     const z = await zipAc(buf); const td = new TextDecoder(); const onbellek = new Map();
     async function model(yol) {
       if (onbellek.has(yol)) return onbellek.get(yol);
@@ -206,17 +206,23 @@ function parcalaMotoru() {
       while ((m = ro.exec(s))) {
         const g = m[2]; const parcalar = []; const rp = /<part id="(\d+)"[^>]*>([\s\S]*?)<\/part>/g; let p;
         const ex = /key="extruder" value="(\d+)"/.exec(g);
-        while ((p = rp.exec(g))) { const ad = /key="name" value="([^"]*)"/.exec(p[2]); const e = /key="extruder" value="(\d+)"/.exec(p[2]); parcalar.push({ ad: ad ? ad[1] : '', ext: e ? +e[1] : (ex ? +ex[1] : 1) }); }
-        ayar.set(m[1], { ext: ex ? +ex[1] : 1, parcalar });
+        while ((p = rp.exec(g))) { const ad = /key="name" value="([^"]*)"/.exec(p[2]); const e = /key="extruder" value="(\d+)"/.exec(p[2]); const tur = /subtype="([^"]*)"/.exec(p[0]); parcalar.push({ ad: ad ? ad[1] : '', ext: e ? +e[1] : (ex ? +ex[1] : 1), tur: tur ? tur[1] : 'normal_part' }); }
+        const oad = /key="name" value="([^"]*)"/.exec(g); const yuz = /face_count="(\d+)"/.exec(g);
+        ayar.set(m[1], { ext: ex ? +ex[1] : 1, parcalar, ad: oad ? oad[1] : '', yuz: yuz ? +yuz[1] : 0 });
       }
     }
+    // dosyadaki nesneler (plakadaki her öğe); seçim yapılmadıysa sadece liste döner
+    const liste = build.map((b, i) => { const a = ayar.get(b.id); return { i, id: b.id, ad: (a && a.ad) || ('Nesne ' + (i + 1)), yuz: a ? a.yuz : 0, renk: a ? a.ext : 1 }; });
+    if (secim === 'liste') return { liste };
+    const secilen = secim == null || secim === 'hepsi' ? build : build.filter((b, i) => secim.includes(i));
     const parcalar = [];
     async function gez(yol, id, M, ust, sira) {
       const { nesneler } = await model(yol); const n = nesneler.get(id); if (!n) return;
-      if (n.mesh) parcalar.push({ ad: n.ad, V: donustur(n.mesh.V, M), F: n.mesh.F, boya: n.mesh.boya, nesne: ust, sira });
-      let k = 0; for (const c of n.bilesen) await gez(c.yol ? c.yol.replace(/^\//, '') : yol, c.id, carp(M, c.M), ust, k++);
+      const a = ayar.get(ust); const tur = a && a.parcalar[sira] ? a.parcalar[sira].tur : 'normal_part';
+      if (n.mesh && tur === 'normal_part') parcalar.push({ ad: n.ad, V: donustur(n.mesh.V, M), F: n.mesh.F, boya: n.mesh.boya, nesne: ust, sira });
+      let k = 0; for (const c of n.bilesen) { const kk = k++; const ta = a && a.parcalar[kk] ? a.parcalar[kk].tur : 'normal_part'; if (ust === id && ta !== 'normal_part') continue; await gez(c.yol ? c.yol.replace(/^\//, '') : yol, c.id, carp(M, c.M), ust, kk); }
     }
-    for (const b of build) await gez(ana, b.id, b.M, b.id, 0);
+    for (const b of secilen) await gez(ana, b.id, b.M, b.id, 0);
     for (const p of parcalar) {
       const a = ayar.get(p.nesne); p.ext = 1;
       if (a) { p.ext = a.ext; if (a.parcalar[p.sira]) { p.ad = a.parcalar[p.sira].ad || p.ad; p.ext = a.parcalar[p.sira].ext; } }
@@ -735,12 +741,16 @@ function parcalaMotoru() {
   }
 
   // ================================================================ dosya yükleme (tam akış)
-  async function yukle(ad, buf, ilerle) {
+  async function yukle(ad, buf, ilerle, secim) {
     const uz = ad.toLowerCase().split('.').pop();
     let V, F, parcalar;
     if (uz === 'stl') { ilerle && ilerle('STL okunuyor'); ({ V, F } = stlOku(buf)); parcalar = [{ ad, ext: 1, boya: 0, nT: F.length / 3 }]; }
     else if (uz === '3mf') {
-      const ps = await ucmfOku(buf, ilerle);
+      if (secim == null) {
+        const { liste } = await ucmfOku(buf, null, 'liste');
+        if (liste.length > 1) return { secimGerek: true, liste };
+      }
+      const ps = await ucmfOku(buf, ilerle, secim);
       if (!ps.length) throw new Error('3MF içinde model bulunamadı');
       ilerle && ilerle('Parçalar birleştiriliyor');
       let nv = 0, nf = 0; for (const p of ps) { nv += p.V.length; nf += p.F.length; }

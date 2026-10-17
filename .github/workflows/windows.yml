@@ -1,4 +1,4 @@
-name: Windows kurulum dosyası
+name: Windows installer
 
 on:
   push:
@@ -13,7 +13,7 @@ env:
   PYTHONIOENCODING: utf-8
 
 jobs:
-  derle:
+  build:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
@@ -22,17 +22,17 @@ jobs:
         with:
           node-version: 20
 
-      - name: Arayüzü kaynaktan oluştur
+      - name: Build the app page from source
         run: python kaynak/derle.py
 
-      - name: Bağımlılıkları kur
+      - name: Install dependencies
         run: npm install
 
-      - name: Kurulum dosyasını üret
+      - name: Build the installer
         run: npm run dist
 
-      - name: Sürüm numarasını oku
-        id: surum
+      - name: Read version
+        id: version
         shell: bash
         run: echo "v=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
@@ -41,13 +41,13 @@ jobs:
           name: Parcala-Kurulum
           path: dist/*.exe
 
-      - name: Sürüm sayfasına yükle
+      - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.surum.outputs.v }}
-          name: Parçala ${{ steps.surum.outputs.v }}
+          tag_name: v${{ steps.version.outputs.v }}
+          name: Parçala ${{ steps.version.outputs.v }}
           body: |
-            Windows kurulum dosyası aşağıda: **Parcala-Kurulum-${{ steps.surum.outputs.v }}.exe**
-            İndir, çift tıkla, kur. İlk açılışta Windows "bilinmeyen yayıncı" derse: Ek bilgi > Yine de çalıştır.
+            Windows installer: **Parcala-Kurulum-${{ steps.version.outputs.v }}.exe**
+            Download, double-click, install. If Windows SmartScreen warns about an unknown publisher: More info > Run anyway.
           files: dist/*.exe
           make_latest: true

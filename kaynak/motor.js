@@ -666,23 +666,46 @@ function parcalaMotoru() {
   }
 
   // düz: k = {nokta, normal, pim:{tip:'dubel'|'ust_erkek'|'alt_erkek'|'yok', cap, boy, konum?}}
+  // k.alan (isteğe bağlı): {sekil, en, boy, aci, kaydirU, kaydirV, kayma}
+  //   Düzlem yalnızca bu alanın içinde kesimin konumunda; alanın dışında 'kayma' mm kadar
+  //   yeni parça tarafına kayık ikinci bir düzlem olarak devam eder (basamaklı kesim).
+  //   Böylece kesim yüksekliğine yakın kanat vb. çıkıntılar kesilmez.
   function duzKes(V, F, k, ayar) {
     const E = eksen(k.nokta, k.normal);
+    const yeniUst = k.yeniUst !== false;
+    const al = k.alan || null; const tb = al ? tabanSekli(al) : null;
+    const K = k.duvar || 20, yan = ayar.boslukYan, d = al ? Math.max(0, al.kayma || 0) : 0;
+    if (al) {
+      const C = [E.O[0] + E.u[0] * (al.kaydirU || 0) + E.v[0] * (al.kaydirV || 0), E.O[1] + E.u[1] * (al.kaydirU || 0) + E.v[1] * (al.kaydirV || 0), E.O[2] + E.u[2] * (al.kaydirU || 0) + E.v[2] * (al.kaydirV || 0)];
+      ({ V, F } = incelt(V, F, C, tb.kapsam + d + 3, Math.max(0.25, Math.min(1.0, tb.kapsam / 12))));
+    }
     const bos = ayar.boslukPim; const tu = [], ta = []; const ou = [], oa = []; let pim = null;
     const p = k.pim;
     if (p && p.tip !== 'yok') {
       let cu = 0, cv = 0;
-      const merk = p.konum || kesitMerkezi(V, F, E);
-      if (merk) { const d = [merk[0] - E.O[0], merk[1] - E.O[1], merk[2] - E.O[2]]; cu = dot(d, E.u); cv = dot(d, E.v); }
+      if (al && !p.konum) { cu = al.kaydirU || 0; cv = al.kaydirV || 0; }
+      else {
+        const merk = p.konum || kesitMerkezi(V, F, E);
+        if (merk) { const q = [merk[0] - E.O[0], merk[1] - E.O[1], merk[2] - E.O[2]]; cu = dot(q, E.u); cv = dot(q, E.v); }
+      }
       const r = p.cap / 2, L = p.boy;
       if (p.tip === 'ust_erkek') { tu.push([cu, cv, r, -L]); ta.push([cu, cv, r + bos, -(L + 2 * bos)]); halka(cu, cv, r, GECIS, 0.08, ou); halka(cu, cv, r + bos, GECIS, 0.08, oa); }
       else if (p.tip === 'alt_erkek') { ta.push([cu, cv, r, L]); tu.push([cu, cv, r + bos, L + 2 * bos]); halka(cu, cv, r, GECIS, 0.08, oa); halka(cu, cv, r + bos, GECIS, 0.08, ou); }
       else { const rd = r + bos; tu.push([cu, cv, rd, L / 2 + bos]); ta.push([cu, cv, rd, -(L / 2 + bos)]); halka(cu, cv, rd, GECIS, 0.08, ou); halka(cu, cv, rd, GECIS, 0.08, oa); pim = { r, L }; }
     }
-    const gYap = ter => (u, v) => { let s = 0; for (const [cu, cv, r, dz] of ter) s += dz * adimF(u, v, cu, cv, r, GECIS); return s; };
+    // alan dışı basamak: yeni parça tarafına doğru en fazla d kadar
+    const basamak = kay => (u, v) => al ? Math.min(d, K * Math.max(0, tb.sd(u, v) - kay)) : 0;
+    const isaret = yeniUst ? 1 : -1;
+    const bU = basamak(yeniUst ? 0 : yan), bA = basamak(yeniUst ? yan : 0);
+    const gYap = (ter, b) => (u, v) => { let s = isaret * b(u, v); for (const [cu, cv, r, dz] of ter) s += dz * adimF(u, v, cu, cv, r, GECIS); return s; };
+    const acici = kay => !al ? null : (u, v) => {
+      const s = tb.sd(u, v) - kay; if (s <= 0) return [u, v];
+      const e = 1e-4; const gx = tb.sd(u + e, v) - tb.sd(u - e, v), gy = tb.sd(u, v + e) - tb.sd(u, v - e); const l = Math.hypot(gx, gy) || 1;
+      const m = Math.min(d, K * s); return [u + m * gx / l, v + m * gy / l];
+    };
     const h = k.izgara || ayar.izgara;
-    const ustP = guvenliKes(V, F, E, gYap(tu), true, h, ou.length ? ou : null, ou.length ? 0.06 : 0);
-    const altP = guvenliKes(V, F, E, gYap(ta), false, h, oa.length ? oa : null, oa.length ? 0.06 : 0);
+    const ustP = guvenliKes(V, F, E, gYap(tu, bU), true, h, ou.length ? ou : null, ou.length ? 0.06 : 0, acici(yeniUst ? 0 : yan));
+    const altP = guvenliKes(V, F, E, gYap(ta, bA), false, h, oa.length ? oa : null, oa.length ? 0.06 : 0, acici(yeniUst ? yan : 0));
     return { ust: ustP, alt: altP, pim };
   }
 

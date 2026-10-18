@@ -256,8 +256,9 @@ function parcalaMotoru() {
       }
     }
     const F = new Buyuyen(Uint32Array, n);
-    for (let t = 0; t < n; t += 3) { const a = idx[t], b = idx[t + 1], c = idx[t + 2]; if (a !== b && b !== c && c !== a) F.it3(a, b, c); }
-    return { V: V.son(), F: F.son() };
+    const tut = new Buyuyen(Int32Array, n / 3);
+    for (let t = 0; t < n; t += 3) { const a = idx[t], b = idx[t + 1], c = idx[t + 2]; if (a !== b && b !== c && c !== a) { F.it3(a, b, c); tut.it(t / 3); } }
+    return { V: V.son(), F: F.son(), tut: tut.son() };
   }
 
   // ================================================================ STL
@@ -307,6 +308,21 @@ function parcalaMotoru() {
     }
     return R;
   }
+  // Bambu/Prusa boya kodu (TriangleSelector): onaltılık dizi sondan başa, her yarım bayt: alt 2 bit bölünme,
+  // üst 2 bit durum (yaprak) ya da özel kenar (bölünmüş); durum 3 ise sonraki yarım bayt + 3. Alanca baskın rengi döndürür.
+  function boyaCoz(h) {
+    const n = h.length; let i = 0; const ag = new Map();
+    const yb = () => (i < n ? parseInt(h[n - 1 - i++], 16) : 0);
+    function dugum(w, derin) {
+      if (i >= n || derin > 12) return;
+      const x = yb(); const bol = x & 3, ust = x >> 2;
+      if (bol === 0) { const st = ust === 3 ? yb() + 3 : ust; ag.set(st, (ag.get(st) || 0) + w); }
+      else { const c = bol + 1; for (let k = 0; k < c; k++) dugum(w / c, derin + 1); }
+    }
+    dugum(1, 0);
+    let en = 0, ew = -1; for (const [st, w] of ag) if (w > ew) { ew = w; en = st; }
+    return en;
+  }
   function modelCoz(metin) {
     const nesneler = new Map(); let i = 0;
     for (;;) {
@@ -320,10 +336,23 @@ function parcalaMotoru() {
         const vs = govde.slice(vi, govde.indexOf('</vertices>', vi)); const ts = govde.slice(ti, govde.indexOf('</triangles>', ti));
         const V = new Buyuyen(Float64Array, 1 << 16); const rv = /<vertex\s[^>]*?x="([^"]*)"[^>]*?y="([^"]*)"[^>]*?z="([^"]*)"/g; let m;
         while ((m = rv.exec(vs))) V.it3(+m[1], +m[2], +m[3]);
-        const F = new Buyuyen(Uint32Array, 1 << 16); const rt = /<triangle\s[^>]*?v1="(\d+)"[^>]*?v2="(\d+)"[^>]*?v3="(\d+)"/g;
-        while ((m = rt.exec(ts))) F.it3(+m[1], +m[2], +m[3]);
-        let boya = 0; let q = 0; while ((q = ts.indexOf('paint_color="', q)) >= 0) { if (ts[q + 13] !== '"') boya++; q += 13; }
-        n.mesh = { V: V.son(), F: F.son(), boya };
+        const F = new Buyuyen(Uint32Array, 1 << 16);
+        const boyaliMi = ts.indexOf('paint_color="') >= 0;
+        let renk = null, boya = 0;
+        if (!boyaliMi) { const rt = /<triangle\s[^>]*?v1="(\d+)"[^>]*?v2="(\d+)"[^>]*?v3="(\d+)"/g; while ((m = rt.exec(ts))) F.it3(+m[1], +m[2], +m[3]); }
+        else {
+          const R = new Buyuyen(Uint8Array, 1 << 16); const onb = new Map();
+          const rt = /<triangle\s([^>]*?)\/?>/g;
+          while ((m = rt.exec(ts))) {
+            const a = m[1]; const v1 = /v1="(\d+)"/.exec(a), v2 = /v2="(\d+)"/.exec(a), v3 = /v3="(\d+)"/.exec(a);
+            F.it3(+v1[1], +v2[1], +v3[1]);
+            const p = a.indexOf('paint_color="'); let st = 0;
+            if (p >= 0) { const e = a.indexOf('"', p + 13); const h = a.slice(p + 13, e); if (h) { st = onb.get(h); if (st === undefined) { st = boyaCoz(h); onb.set(h, st); } boya++; } }
+            R.it(st);
+          }
+          renk = R.son();
+        }
+        n.mesh = { V: V.son(), F: F.son(), boya, renk };
       }
       const rc = /<component\b([^>]*)\/>/g; let m;
       while ((m = rc.exec(govde))) { const c = attrs(m[1]); n.bilesen.push({ yol: c['p:path'], id: c.objectid, M: matris(c.transform) }); }
@@ -364,7 +393,7 @@ function parcalaMotoru() {
     async function gez(yol, id, M, ust, sira) {
       const { nesneler } = await model(yol); const n = nesneler.get(id); if (!n) return;
       const a = ayar.get(ust); const tur = a && a.parcalar[sira] ? a.parcalar[sira].tur : 'normal_part';
-      if (n.mesh && tur === 'normal_part') parcalar.push({ ad: n.ad, V: donustur(n.mesh.V, M), F: n.mesh.F, boya: n.mesh.boya, nesne: ust, sira });
+      if (n.mesh && tur === 'normal_part') parcalar.push({ ad: n.ad, V: donustur(n.mesh.V, M), F: n.mesh.F, boya: n.mesh.boya, renk: n.mesh.renk, nesne: ust, sira });
       let k = 0; for (const c of n.bilesen) { const kk = k++; const ta = a && a.parcalar[kk] ? a.parcalar[kk].tur : 'normal_part'; if (ust === id && ta !== 'normal_part') continue; await gez(c.yol ? c.yol.replace(/^\//, '') : yol, c.id, carp(M, c.M), ust, kk); }
     }
     for (const b of secilen) await gez(ana, b.id, b.M, b.id, 0);
@@ -372,6 +401,11 @@ function parcalaMotoru() {
       const a = ayar.get(p.nesne); p.ext = 1;
       if (a) { p.ext = a.ext; if (a.parcalar[p.sira]) { p.ad = a.parcalar[p.sira].ad || p.ad; p.ext = a.parcalar[p.sira].ext; } }
     }
+    // filament renkleri
+    let filament = null;
+    const ps = await z.oku('Metadata/project_settings.config');
+    if (ps) { const m2 = /"filament_colour"\s*:\s*\[([^\]]*)\]/.exec(td.decode(ps)); if (m2) filament = [...m2[1].matchAll(/"(#[0-9A-Fa-f]{6,8})"/g)].map(x => x[1].slice(0, 7)); }
+    parcalar.filament = filament;
     return parcalar;
   }
   function donustur(V, M) {
@@ -732,7 +766,8 @@ function parcalaMotoru() {
     const yerel = (u, v) => { const x = u - du, y = v - dv; return [x * ca + y * sa, -x * sa + y * ca]; };
     if (t.sekil === 'daire') { const r = t.yaricap || t.en / 2; return { sd: (u, v) => { const [x, y] = yerel(u, v); return Math.hypot(x, y) - r; }, kapsam: r + Math.hypot(du, dv) }; }
     let poly;
-    if (t.sekil === 'elips') { const a = t.en / 2, b = t.boy / 2; poly = []; for (let i = 0; i < 180; i++) { const q = 2 * Math.PI * i / 180; poly.push([a * Math.cos(q), b * Math.sin(q)]); } }
+    if (t.sekil === 'cokgen' && t.noktalar && t.noktalar.length >= 3) poly = t.noktalar.map(p => [p[0], p[1]]);
+    else if (t.sekil === 'elips') { const a = t.en / 2, b = t.boy / 2; poly = []; for (let i = 0; i < 180; i++) { const q = 2 * Math.PI * i / 180; poly.push([a * Math.cos(q), b * Math.sin(q)]); } }
     else { const a = t.en / 2, b = t.boy / 2; poly = [[-a, -b], [a, -b], [a, b], [-a, b]]; }
     const R = Math.max(...poly.map(p => Math.hypot(p[0], p[1])));
     return {
@@ -887,7 +922,7 @@ function parcalaMotoru() {
   // ================================================================ dosya yükleme (tam akış)
   async function yukle(ad, buf, ilerle, secim) {
     const uz = ad.toLowerCase().split('.').pop();
-    let V, F, parcalar;
+    let V, F, parcalar, renk = null, filament = null;
     if (uz === 'stl') { ilerle && ilerle('STL okunuyor'); ({ V, F } = stlOku(buf)); parcalar = [{ ad, ext: 1, boya: 0, nT: F.length / 3 }]; }
     else if (uz === '3mf') {
       if (secim == null) {
@@ -900,13 +935,19 @@ function parcalaMotoru() {
       let nv = 0, nf = 0; for (const p of ps) { nv += p.V.length; nf += p.F.length; }
       const P = new Float64Array(nf * 3); let o = 0;
       for (const p of ps) for (let i = 0; i < p.F.length; i++) { const v = p.F[i] * 3; P[o++] = p.V[v]; P[o++] = p.V[v + 1]; P[o++] = p.V[v + 2]; }
-      ({ V, F } = kaynakla(P));
+      const k = kaynakla(P); V = k.V; F = k.F;
+      // yüz başına renk (extruder no): boya varsa boyadan, yoksa parçanın extruder'ı
+      const ham = new Uint8Array(nf / 3); let o2 = 0;
+      for (const p of ps) { const nt = p.F.length / 3; for (let t = 0; t < nt; t++) ham[o2++] = (p.renk && p.renk[t]) ? p.renk[t] : p.ext; }
+      const farkli = new Set(ham); 
+      if (farkli.size > 1) { renk = new Uint8Array(k.tut.length); for (let t = 0; t < k.tut.length; t++) renk[t] = ham[k.tut[t]]; }
+      filament = ps.filament;
       parcalar = ps.map(p => ({ ad: p.ad, ext: p.ext, boya: p.boya, nT: p.F.length / 3 }));
     } else throw new Error('Sadece .stl ve .3mf dosyaları açılabilir');
     // model koordinatı: XY ortalı, en alt Z=0
     const { lo, hi } = sinirlar(V); const tx = -(lo[0] + hi[0]) / 2, ty = -(lo[1] + hi[1]) / 2, tz = -lo[2];
     for (let i = 0; i < V.length; i += 3) { V[i] += tx; V[i + 1] += ty; V[i + 2] += tz; }
-    return { V, F, parcalar };
+    return { V, F, parcalar, renk, filament };
   }
 
   return { yukle, kes, guvenliKes, eksen, tikacKes, duzKes, kesitMerkezi, pimMesh, hacim, kapaliMi, sinirlar, stlYaz, ucmfYaz, zipYaz, delaunay, kaynakla, stlOku, tabanSekli };
@@ -930,7 +971,8 @@ function isciAna(M, gonder) {
         gonder({ tip: 'ilerle', yazi: 'Kontrol ediliyor' });
         const { lo, hi } = M.sinirlar(r.V); const kap = M.kapaliMi(r.V, r.F);
         const V32 = Float32Array.from(r.V), F2 = r.F.slice();
-        gonder({ tip: 'model', V: V32, F: F2, parcalar: r.parcalar, lo, hi, hacim: M.hacim(r.V, r.F), kapali: kap }, [V32.buffer, F2.buffer]);
+        const aktar = [V32.buffer, F2.buffer]; if (r.renk) aktar.push(r.renk.buffer);
+        gonder({ tip: 'model', V: V32, F: F2, parcalar: r.parcalar, lo, hi, hacim: M.hacim(r.V, r.F), kapali: kap, renk: r.renk, filament: r.filament }, aktar);
       } else if (msg.tip === 'kes') {
         const ayar = msg.ayar; const parcalar = new Map([['model', model]]); const pimler = []; const n = msg.kesimler.length;
         for (let i = 0; i < n; i++) {
@@ -956,7 +998,7 @@ function isciAna(M, gonder) {
             if (!k.nokta) throw new Error(`"${k.ad}": modelde yer seçilmedi`);
             const r = M.tikacKes(src.V, src.F, {
               nokta: k.nokta, yon: k.yon, yukari: k.yukari || undefined, derinlik: k.derinlik, duvar: k.duvar, icPay: k.icPay,
-              taban: { sekil: k.sekil, en: k.en, boy: k.boy, aci: k.aci, kaydirU: k.kaydirU, kaydirV: k.kaydirV },
+              taban: { sekil: k.sekil, en: k.en, boy: k.boy, aci: k.aci, kaydirU: k.kaydirU, kaydirV: k.kaydirV, noktalar: k.noktalar },
               anahtar: k.anahtar ? { u: k.kaydirU, v: k.kaydirV + Math.min(k.en, k.boy) * 0.22, cap: Math.max(1.6, Math.min(2.6, Math.min(k.en, k.boy) * 0.2)), derinlik: 1.0 } : null
             }, ayar);
             if (!r.parca) throw new Error(`"${k.ad}": tıkaç "${k.hedefAd || 'seçilen'}" parçasına değmiyor. Tıkladığın yer başka bir parçada kalıyor olabilir: "Kesilecek parça"yı kontrol et ya da yeri yeniden seç.`);
@@ -1102,11 +1144,13 @@ const Gor = (() => {
     gl.uniform1i(u.vrenk, 0);
     if (izgaraT) { gl.uniform1i(u.duz, 1); gl.uniform3fv(u.renk, rgb(cs.getPropertyValue('--grid').trim() || '#c9cfc8')); gl.uniform1f(u.alfa, 1); gl.uniform3f(u.kay, 0, 0, -0.01); gl.bindVertexArray(izgaraT.vao); gl.drawArrays(gl.LINES, 0, izgaraT.n); }
     gl.uniform1i(u.duz, 0);
-    for (const g of govdeler) { if (!g.gorunur) continue; gl.uniform1i(u.vrenk, g.t.renkli ? 1 : 0); gl.uniform3fv(u.renk, g.renk); gl.uniform1f(u.alfa, 1); gl.uniform3fv(u.kay, g.kay || [0, 0, 0]); gl.bindVertexArray(g.t.vao); gl.drawElements(gl.TRIANGLES, g.t.n, gl.UNSIGNED_INT, 0); }
+    for (const g of govdeler) { if (!g.gorunur) continue; gl.uniform1i(u.vrenk, g.t.renkli ? 1 : 0); gl.uniform3fv(u.renk, g.renk); gl.uniform1f(u.alfa, 1); gl.uniform3fv(u.kay, g.kay || [0, 0, 0]); gl.bindVertexArray(g.t.vao); if (g.t.ib) gl.drawElements(gl.TRIANGLES, g.t.n, gl.UNSIGNED_INT, 0); else gl.drawArrays(gl.TRIANGLES, 0, g.t.n); }
     // üst katman: yarı saydam kesiciler ve çizgiler
     gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
     gl.uniform1i(u.duz, 1); gl.uniform1i(u.vrenk, 0); gl.uniform3f(u.kay, 0, 0, 0);
+    gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(-1, -2);
     for (const s of ustler) { gl.uniform3fv(u.renk, s.renk); gl.uniform1f(u.alfa, s.alfa); gl.bindVertexArray(s.t.vao); gl.drawArrays(gl.TRIANGLES, 0, s.t.n); }
+    gl.disable(gl.POLYGON_OFFSET_FILL);
     for (const c of cizgiler) { gl.uniform3fv(u.renk, c.renk); gl.uniform1f(u.alfa, c.alfa ?? 1); if (c.ustte) gl.disable(gl.DEPTH_TEST); gl.bindVertexArray(c.t.vao); gl.drawArrays(gl.LINES, 0, c.t.n); gl.enable(gl.DEPTH_TEST); }
     gl.depthMask(true); gl.bindVertexArray(null);
   }
@@ -1214,6 +1258,20 @@ function kesimHTML(k, i) {
         g += `<div class="tam bilgi">Alanın dışındaki çıkıntılar (kanat gibi) kesilmez. Kaydırıcıyla kanatların altına inecek kadar aç; model canlı boyanır.</div>`;
         g += `<details class="tam"><summary>Alan merkezini kaydır</summary><div class="izgara" style="grid-template-columns:1fr 1fr">${sayiAlan('au_' + k.id, k.eksen === 'z' ? 'X (mm)' : 'Yatay (mm)', yuvarla(k.alanU || 0, 2), -500, 500, 0.05)}${sayiAlan('av_' + k.id, k.eksen === 'z' ? 'Y (mm)' : 'Dikey (mm)', yuvarla(k.alanV || 0, 2), -500, 500, 0.05)}<div class="tam"><button type="button" class="btn kucuk" id="ao_${k.id}">Kesitin ortasına al</button></div></div></details>`;
       }
+    } else if (k.mod === 'bolge') {
+      const b = k.bolge;
+      g += secim('bm_' + k.id, 'Nasıl seçilsin', b.modu, [['renk', 'Renge göre (boyalı modelde)'], ['kenar', 'Kenara / derinliğe göre']], true);
+      if (b.modu === 'renk' && !(D.model && D.model.renk)) g += `<div class="tam bilgi">Bu modelde boya bilgisi yok. "Kenara / derinliğe göre" seç.</div>`;
+      if (b.modu === 'kenar') g += sayiAlan('ba_' + k.id, 'Hassasiyet: bu açıdan keskin kenarda dur (°)', b.aci, 3, 80, 1, 'tam');
+      if (b.secim) {
+        g += `<div class="tam bilgi">Seçili: <span class="sayi">${b.sayi.toLocaleString('tr-TR')}</span> üçgen · <span class="sayi">${k.en.toFixed(1)} × ${k.boy.toFixed(1)}</span> mm · girinti <span class="sayi">${b.girinti.toFixed(2)}</span> mm${b.uyari ? `<br><b>${esc(b.uyari)}</b>` : ''}</div>`;
+        g += sayiAlan('be_' + k.id, 'Tıkaç dili: bölgenin altına ek derinlik (mm)', b.ek, 0.5, 15, 0.05, 'tam');
+        g += `<details class="tam"><summary>İnce ayar</summary><div class="izgara" style="grid-template-columns:1fr 1fr">
+          ${sayiAlan('dw_' + k.id, 'Duvar dikliği', k.duvar, 2, 40, 1)}
+          ${sayiAlan('ip_' + k.id, 'Kenar payı (mm)', k.icPay, 0, 1, 0.01)}
+        </div></details>`;
+        g += `<div class="tam satir"><button type="button" class="btn kucuk" id="bt_${k.id}">Seçimi temizle</button></div>`;
+      } else g += `<div class="tam bilgi">${b.modu === 'renk' ? 'Ayırmak istediğin renkli bölgeye tıkla (ör. vizör). Aynı renkteki bitişik yüzey seçilir.' : 'Ayırmak istediğin bölgeye tıkla. Seçim, keskin kenara (girintinin dudağına) kadar yayılır.'}</div>`;
     } else if (k.mod === 'kanat') {
       const n = k.kanat.tik.length; const adimlar = ['Kanadın bir yüzüne tıkla', 'Kanadın öbür yüzüne tıkla', 'Kanadın bir ucuna tıkla (gövdeye bağlandığı uç)', 'Kanadın öbür ucuna tıkla (en uzak uç)'];
       g += `<div class="tam kanat-adim">${adimlar.map((a, j) => `<div class="${j < n ? 'bitti' : j === n ? 'simdi' : ''}"><b>${j + 1}</b>${a}${j === 1 && n >= 2 ? ` · <span class="sayi">kalınlık ${k.kanat.kalinlik.toFixed(2)} mm</span>` : ''}${j === 3 && n >= 4 ? ` · <span class="sayi">boy ${k.boy.toFixed(1)} mm</span>` : ''}</div>`).join('')}</div>`;
@@ -1243,7 +1301,7 @@ function kesimHTML(k, i) {
     g += `<div class="tam satir" style="justify-content:space-between"><span class="bilgi">${k.tip === 'duz' ? 'Turuncu düzlem kesim yeri, halka pim yeri.' : 'Turuncu kutu: renkli parça ve gövdeye giren tıkacı.'}</span><button type="button" class="btn kucuk" id="sil_${k.id}">Sil</button></div>`;
   }
   return `<div class="kesim ${sec ? 'secili' : ''}" data-id="${k.id}">
-    <div class="kbas" data-sec="${k.id}" role="button" tabindex="0" aria-expanded="${sec}"><span class="no">${i + 1}</span><span class="renkn" style="background:${renkHex(k.renk)}"></span><span class="ad">${esc(k.ad)}</span><span class="tip">${k.tip === 'duz' ? 'düz kesim' : k.mod === 'kanat' ? 'kanat' : 'tıkaç'}</span></div>
+    <div class="kbas" data-sec="${k.id}" role="button" tabindex="0" aria-expanded="${sec}"><span class="no">${i + 1}</span><span class="renkn" style="background:${renkHex(k.renk)}"></span><span class="ad">${esc(k.ad)}</span><span class="tip">${k.tip === 'duz' ? 'düz kesim' : k.mod === 'kanat' ? 'kanat' : k.mod === 'bolge' ? 'akıllı seçim' : 'tıkaç'}</span></div>
     ${sec ? `<div class="kgovde">${g}</div>` : ''}</div>`;
 }
 function panelCiz() {
@@ -1266,14 +1324,14 @@ function panelCiz() {
       h += `<div class="bilgi"><span class="sayi">${b}</span> mm · <span class="sayi">${(m.F.length / 3).toLocaleString('tr-TR')}</span> üçgen · <span class="sayi">${(m.hacim / 1000).toFixed(1)}</span> cm³</div>`;
       const ext = new Set(m.parcalar.map(p => p.ext)); const boya = m.parcalar.reduce((s, p) => s + (p.boya || 0), 0);
       if (m.parcalar.length > 1 && ext.size > 1) h += `<div class="not">Bu 3MF'te renkler <b>${m.parcalar.length} ayrı parça</b> halinde. Bu sürüm onları tek gövde gibi açar; kesimleri sen tanımlarsın.</div>`;
-      else if (boya) h += `<div class="not">Bu modelde <b>boya ile renklendirilmiş</b> ${boya.toLocaleString('tr-TR')} üçgen var. Boyaya göre otomatik kesim bir sonraki sürümde gelecek.</div>`;
+      else if (boya) h += `<div class="not">Bu modelde <b>boya ile renklendirilmiş</b> ${boya.toLocaleString('tr-TR')} üçgen var. Renkli bir bölgeyi ayırmak için <b>+ Akıllı seçim</b> ekleyip o bölgeye tıkla.</div>`;
       h += `<label class="al">Ana gövde rengi</label>${renkSecici(D.anaRenk, 'data-ana="1"')}`;
     }
     h += `</div>`;
     h += `<div class="bolum"><h2>Kesimler</h2>`;
     if (!D.kesimler.length) h += `<div class="not">Ayırmak istediğin her renkli bölge için bir kesim ekle. Düz kesim: burun, taban gibi düz çizgiden ayrılan yerler. Tıkaç: cam, logo, kanat gibi gövdeye gömülü parçalar.</div>`;
     h += D.kesimler.map(kesimHTML).join('');
-    h += `<div class="satir"><button type="button" class="btn" id="ekleDuz">+ Düz kesim</button><button type="button" class="btn" id="ekleTikac">+ Tıkaç (cam, rozet)</button><button type="button" class="btn" id="ekleKanat">+ Kanat (4 tık)</button></div></div>`;
+    h += `<div class="satir"><button type="button" class="btn" id="ekleDuz">+ Düz kesim</button><button type="button" class="btn" id="ekleTikac">+ Tıkaç (cam, rozet)</button><button type="button" class="btn" id="ekleKanat">+ Kanat (4 tık)</button><button type="button" class="btn" id="ekleBolge">+ Akıllı seçim (renk / kenar)</button></div></div>`;
     h += `<details class="bolum"><summary>Toleranslar (parçalar sıkı/gevşek gelirse)</summary><div class="izgara">
       ${sayiAlan('t_yan', 'Yan boşluk', D.ayar.boslukYan, 0, 0.6, 0.01)}${sayiAlan('t_der', 'Dip boşluk', D.ayar.boslukDerinlik, 0, 0.6, 0.01)}${sayiAlan('t_pim', 'Pim boşluğu', D.ayar.boslukPim, 0, 0.6, 0.01)}</div></details>`;
     if (D.hata) h += `<div class="hata" role="alert">${esc(D.hata)}</div>`;
@@ -1301,6 +1359,7 @@ function ipucuCiz() {
   const k = seciliKesim(); let h = '';
   if (D.mod === 'duzen' && k) {
     if (k.mod === 'kanat') { const n = k.kanat.tik.length; h = `<span class="vurgu">${['1/4 · Kanadın bir yüzüne tıkla', '2/4 · Kanadın öbür yüzüne tıkla', '3/4 · Kanadın gövdeye bağlandığı uca tıkla', '4/4 · Kanadın öbür ucuna tıkla'][n] || 'Kanat seçildi · baştan seçmek için panelden "Baştan seç"'}</span>`; }
+    else if (k.mod === 'bolge') h = `<span class="vurgu">${k.bolge.secim ? 'Başka yere tıklarsan seçim yenilenir' : k.bolge.modu === 'renk' ? 'Ayıracağın renkli bölgeye tıkla' : 'Ayıracağın bölgeye tıkla · keskin kenarda durur'}</span>`;
     else if (k.tip === 'tikac') h = `<span class="vurgu">${k.nokta ? 'Yeri değiştirmek için modele tıkla' : 'Renkli bölgenin ortasına tıkla'}</span>`;
     else h = `<span class="vurgu">Kesim yüksekliği için modele tıkla</span>`;
   }
@@ -1317,7 +1376,7 @@ function baglaPanel() {
   panel.querySelectorAll('.renkler button').forEach(b => b.onclick = () => {
     const r = b.dataset.renk;
     if (b.dataset.ana) D.anaRenk = r;
-    else if (b.dataset.kesim) D.kesimler.find(k => k.id === b.dataset.kesim).renk = r;
+    else if (b.dataset.kesim) { const k = D.kesimler.find(k => k.id === b.dataset.kesim); k.renk = r; k.renkElle = true; }
     else if (b.dataset.parca) { if (b.dataset.parca === 'model') D.anaRenk = r; else D.kesimler.find(k => k.id === b.dataset.parca).renk = r; sonucCiz(); }
     panelCiz(); if (D.mod === 'duzen') modelCiz();
   });
@@ -1325,6 +1384,7 @@ function baglaPanel() {
   if (e('ekleDuz')) e('ekleDuz').onclick = () => { const k = yeniKesim('duz'); D.kesimler.push(k); D.secili = k.id; panelCiz(); onizleme(); };
   if (e('ekleTikac')) e('ekleTikac').onclick = () => { const k = yeniKesim('tikac'); D.kesimler.push(k); D.secili = k.id; panelCiz(); onizleme(); };
   if (e('ekleKanat')) e('ekleKanat').onclick = () => { const k = yeniKesim('tikac'); Object.assign(k, { mod: 'kanat', ad: 'Kanat ' + (D.kesimler.filter(x => x.mod === 'kanat').length + 1), kanat: { tik: [] }, sekil: 'dikdortgen', derinlik: 2.5, duvar: 12, icPay: 0.2, anahtar: false }); D.kesimler.push(k); D.secili = k.id; panelCiz(); onizleme(); };
+  if (e('ekleBolge')) e('ekleBolge').onclick = () => { const k = yeniKesim('tikac'); Object.assign(k, { mod: 'bolge', ad: 'Bölge ' + (D.kesimler.filter(x => x.mod === 'bolge').length + 1), bolge: { modu: D.model && D.model.renk ? 'renk' : 'kenar', aci: 30, ek: 1.5, tohum: null, secim: null }, sekil: 'cokgen', duvar: 30, icPay: 0.05, anahtar: false }); D.kesimler.push(k); D.secili = k.id; panelCiz(); onizleme(); };
   if (e('calistir')) e('calistir').onclick = calistir;
   if (e('indir')) e('indir').onclick = indir;
   if (e('geri')) e('geri').onclick = () => { D.mod = 'duzen'; D.hata = null; panelCiz(); modelCiz(); onizleme(); };
@@ -1357,6 +1417,15 @@ function baglaPanel() {
     if (e('pc_' + k.id)) baglaSayi('pc_' + k.id, v => yaz('pimCap', v));
     if (e('pb_' + k.id)) baglaSayi('pb_' + k.id, v => yaz('pimBoy', v));
   } else {
+    if (k.mod === 'bolge') {
+      const b = k.bolge; const yenile = () => { if (b.tohum != null) { bolgeSec(k, b.tohum); } panelCiz(); onizleme(); };
+      e('bm_' + k.id).onchange = ev => { b.modu = ev.target.value; yenile(); };
+      if (e('ba_' + k.id)) { baglaSayi('ba_' + k.id, v => { b.aci = v; clearTimeout(b._z); b._z = setTimeout(yenile, 250); }); }
+      if (e('be_' + k.id)) baglaSayi('be_' + k.id, v => { b.ek = v; bolgeTikac(k); onizleme(); });
+      for (const [p, alan] of [['dw_', 'duvar'], ['ip_', 'icPay']]) if (e(p + k.id)) baglaSayi(p + k.id, v => yaz(alan, v));
+      if (e('bt_' + k.id)) e('bt_' + k.id).onclick = () => { Object.assign(b, { tohum: null, secim: null }); k.nokta = null; k.yon = null; k.noktalar = null; panelCiz(); onizleme(); };
+      return;
+    }
     if (k.mod === 'kanat') {
       if (e('dr_' + k.id)) baglaSayi('dr_' + k.id, v => { k.derinlik = v; kanatHesapla(k); onizleme(); });
       if (e('kk_' + k.id)) baglaSayi('kk_' + k.id, v => { k.kanat.kalinlik = v; kanatHesapla(k); onizleme(); });
@@ -1478,6 +1547,7 @@ function kanatHesapla(k) {
   k.kanat.orta = v3.top(m, v3.k(yon, 0.0));
 }
 function cevreNoktalari(k) {
+  if (k.sekil === 'cokgen' && k.noktalar) return k.noktalar;
   const pts = []; const ca = Math.cos(k.aci * Math.PI / 180), sa = Math.sin(k.aci * Math.PI / 180);
   const ekle = (x, y) => pts.push([k.kaydirU + x * ca - y * sa, k.kaydirV + x * sa + y * ca]);
   if (k.sekil === 'dikdortgen') { const a = k.en / 2, b = k.boy / 2; ekle(-a, -b); ekle(a, -b); ekle(a, b); ekle(-a, b); }
@@ -1497,6 +1567,15 @@ function onizleme() {
       for (const t of k.kanat.tik) { const p = t.p; L.push(p[0] - s, p[1], p[2], p[0] + s, p[1], p[2], p[0], p[1] - s, p[2], p[0], p[1] + s, p[2], p[0], p[1], p[2] - s, p[0], p[1], p[2] + s); }
       lines.push({ V: new Float32Array(L), renk: cut, ustte: true });
       if (k.kanat.tik.length < 4) continue;
+    }
+    if (k.mod === 'bolge' && k.bolge.secim) {
+      if (!k.bolge._V || k.bolge._kaynak !== k.bolge.secim) {
+        const S = k.bolge.secim, V = m.V, F = m.F; const T = new Float32Array(S.length * 9);
+        for (let i = 0; i < S.length; i++) for (let c = 0; c < 3; c++) { const v = F[3 * S[i] + c] * 3; T[9 * i + 3 * c] = V[v]; T[9 * i + 3 * c + 1] = V[v + 1]; T[9 * i + 3 * c + 2] = V[v + 2]; }
+        k.bolge._V = T; k.bolge._kaynak = k.bolge.secim;
+      }
+      tris.push({ V: k.bolge._V, renk: Gor.rgb(renkHex(k.renk)), alfa: 0.75 });
+      if (k.bolge.sinir) lines.push({ V: k.bolge.sinir, renk: cut, ustte: true });
     }
     if (k.tip === 'duz') {
       const ix = 'xyz'.indexOf(k.eksen); const a = (ix + 1) % 3, b = (ix + 2) % 3; const pad = boy * 0.08;
@@ -1570,7 +1649,7 @@ function kesimBolgesi(k) {        // nokta -> bu kesimin yeni parçasında mı?
   }
   if (!k.nokta || !k.yon) return () => false;
   const E = yardimci.eksen(v3.cik(k.nokta, v3.k(k.yon, k.derinlik)), k.yon, k.yukari);
-  const tb = yardimci.tabanSekli({ sekil: k.sekil, en: k.en, boy: k.boy, aci: k.aci, kaydirU: k.kaydirU, kaydirV: k.kaydirV });
+  const tb = yardimci.tabanSekli({ sekil: k.sekil, en: k.en, boy: k.boy, aci: k.aci, kaydirU: k.kaydirU, kaydirV: k.kaydirV, noktalar: k.noktalar });
   const K = k.duvar || 10, m = k.icPay ?? 0.15;
   return p => {
     const d = v3.cik(p, E.O); const w = v3.d(d, E.w); if (w <= 0) return false;
@@ -1588,24 +1667,52 @@ function bolgeRenkle() {
   clearTimeout(renkZamanlayici);
   renkZamanlayici = setTimeout(() => {
     if (!Gor || !D.model || D.mod !== 'duzen') return;
-    const V = D.model.V, n = V.length / 3; const C = new Float32Array(V.length);
+    const V = D.model.V, n = V.length / 3;
     const testler = D.kesimler.map(kesimBolgesi);
-    const renkler = { model: Gor.rgb(renkHex(D.anaRenk)) }; for (const k of D.kesimler) renkler[k.id] = Gor.rgb(renkHex(k.renk));
-    const p = [0, 0, 0];
+    const renkler = { model: Gor.rgb(renkHex(D.anaRenk)) }; const sira = { model: -1 };
+    D.kesimler.forEach((k, j) => { renkler[k.id] = Gor.rgb(renkHex(k.renk)); sira[k.id] = j; });
+    const kim = new Int16Array(n); const p = [0, 0, 0];
     for (let i = 0; i < n; i++) {
       p[0] = V[3 * i]; p[1] = V[3 * i + 1]; p[2] = V[3 * i + 2];
       let id = 'model';
       for (let j = 0; j < testler.length; j++) if (D.kesimler[j].hedef === id && testler[j](p)) id = D.kesimler[j].id;
-      const c = renkler[id]; C[3 * i] = c[0]; C[3 * i + 1] = c[1]; C[3 * i + 2] = c[2];
+      kim[i] = sira[id];
     }
-    Gor.renkVer(0, C);
+    const rk = j => j < 0 ? renkler.model : renkler[D.kesimler[j].id];
+    if (D.model.renk) {
+      const F = D.model.F, R = D.model.renk; const C = new Float32Array(F.length * 3); const fr = new Map();
+      for (let t = 0; t < F.length / 3; t++) {
+        let fc = fr.get(R[t]); if (!fc) { fc = filamentRgb(R[t]); fr.set(R[t], fc); }
+        for (let c = 0; c < 3; c++) { const j = kim[F[3 * t + c]]; const col = j < 0 ? fc : rk(j); const o = 9 * t + 3 * c; C[o] = col[0]; C[o + 1] = col[1]; C[o + 2] = col[2]; }
+      }
+      Gor.renkVer(0, C);
+    } else {
+      const C = new Float32Array(V.length);
+      for (let i = 0; i < n; i++) { const c = rk(kim[i]); C[3 * i] = c[0]; C[3 * i + 1] = c[1]; C[3 * i + 2] = c[2]; }
+      Gor.renkVer(0, C);
+    }
   }, 120);
 }
 
 // ====================================================================== model / sonuç çizimi
+function filamentRgb(c) {
+  const f = D.model && D.model.filament; const h = f && f[c - 1];
+  if (h) return Gor.rgb(h);
+  return Gor.rgb(RENKLER[(c + 1) % RENKLER.length][2]);
+}
+function enYakinRenk(rgb) {     // filament rengine en yakın paletteki renk
+  let en = 'beyaz', d0 = Infinity;
+  for (const r of RENKLER) { const q = Gor.rgb(r[2]); const d = (q[0] - rgb[0]) ** 2 + (q[1] - rgb[1]) ** 2 + (q[2] - rgb[2]) ** 2; if (d < d0) { d0 = d; en = r[0]; } }
+  return en;
+}
 function modelCiz() {
   if (!Gor || !D.model) return;
-  Gor.govdeAyarla([{ V: D.model.V, F: D.model.F, renk: Gor.rgb(renkHex(D.anaRenk)), gorunur: true }]);
+  const m = D.model;
+  if (m.renk) {
+    // boyalı model: her üçgen kendi rengiyle (köşeler açılır)
+    if (!m._genis) { const F = m.F, V = m.V; const E = new Float32Array(F.length * 3); for (let i = 0; i < F.length; i++) { const v = F[i] * 3; E[3 * i] = V[v]; E[3 * i + 1] = V[v + 1]; E[3 * i + 2] = V[v + 2]; } m._genis = E; }
+    Gor.govdeAyarla([{ V: m._genis, F: null, renk: [1, 1, 1], gorunur: true }]);
+  } else Gor.govdeAyarla([{ V: m.V, F: m.F, renk: Gor.rgb(renkHex(D.anaRenk)), gorunur: true }]);
   bolgeRenkle();
 }
 function sonucCiz() {
@@ -1664,6 +1771,117 @@ function sonucCiz() {
     e.preventDefault();
   });
 })();
+// ====================================================================== akıllı seçim (renk / kenar)
+// Komşuluk: köşe -> üçgenler (CSR). Büyük modelde bir kez hesaplanır.
+function komsuluk() {
+  const m = D.model; if (m._kom) return m._kom;
+  const F = m.F, nv = m.V.length / 3, nf = F.length / 3;
+  const bas = new Int32Array(nv + 1); for (let i = 0; i < F.length; i++) bas[F[i] + 1]++;
+  for (let i = 0; i < nv; i++) bas[i + 1] += bas[i];
+  const yer = bas.slice(0, nv), liste = new Int32Array(F.length);
+  for (let t = 0; t < nf; t++) for (let c = 0; c < 3; c++) liste[yer[F[3 * t + c]]++] = t;
+  const N = new Float32Array(nf * 3), A = new Float32Array(nf); const V = m.V;
+  for (let t = 0; t < nf; t++) {
+    const a = F[3 * t] * 3, b = F[3 * t + 1] * 3, c = F[3 * t + 2] * 3;
+    const ux = V[b] - V[a], uy = V[b + 1] - V[a + 1], uz = V[b + 2] - V[a + 2], vx = V[c] - V[a], vy = V[c + 1] - V[a + 1], vz = V[c + 2] - V[a + 2];
+    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; const l = Math.hypot(nx, ny, nz) || 1;
+    N[3 * t] = nx / l; N[3 * t + 1] = ny / l; N[3 * t + 2] = nz / l; A[t] = l / 2;
+  }
+  m._kom = { bas, liste, N, A }; return m._kom;
+}
+// t üçgeninin a-b kenarını paylaşan komşusu (yoksa -1)
+function kenarKomsu(K, F, t, a, b) {
+  for (let i = K.bas[a]; i < K.bas[a + 1]; i++) { const s = K.liste[i]; if (s === t) continue; const o = 3 * s; if (F[o] === b || F[o + 1] === b || F[o + 2] === b) return s; }
+  return -1;
+}
+function bolgeSec(k, tohum) {
+  const m = D.model, F = m.F, K = komsuluk(), b = k.bolge; const nf = F.length / 3;
+  b.tohum = tohum;
+  const renkli = b.modu === 'renk' && m.renk; const R = m.renk; const r0 = renkli ? R[tohum] : 0;
+  const cosA = Math.cos(b.aci * Math.PI / 180), N = K.N;
+  const ic = new Uint8Array(nf); ic[tohum] = 1; const kuyruk = [tohum]; const S = [];
+  const n0 = [N[3 * tohum], N[3 * tohum + 1], N[3 * tohum + 2]];
+  while (kuyruk.length) {
+    const t = kuyruk.pop(); S.push(t);
+    for (let c = 0; c < 3; c++) {
+      const a = F[3 * t + c], bb = F[3 * t + (c + 1) % 3]; const s = kenarKomsu(K, F, t, a, bb); if (s < 0 || ic[s]) continue;
+      if (renkli) { if (R[s] !== r0) continue; }
+      else {
+        const d = N[3 * t] * N[3 * s] + N[3 * t + 1] * N[3 * s + 1] + N[3 * t + 2] * N[3 * s + 2]; if (d < cosA) continue;
+        // yavaş kıvrılan geniş yüzeylerde taşmasın: tohum yüzeyinden 85°'den fazla dönme
+        if (n0[0] * N[3 * s] + n0[1] * N[3 * s + 1] + n0[2] * N[3 * s + 2] < 0.08) continue;
+      }
+      ic[s] = 1; kuyruk.push(s);
+    }
+  }
+  b.secim = Int32Array.from(S); b.sayi = S.length; b._ic = ic;
+  // boyalı modelde parçanın rengini bölgenin baskın boyasından al
+  if (R && !k.renkElle) { const say = new Map(); for (const t of S) say.set(R[t], (say.get(R[t]) || 0) + 1); let en = 0, ec = 0; for (const [c, n] of say) if (n > en) { en = n; ec = c; } k.renk = enYakinRenk(filamentRgb(ec)); }
+  bolgeTikac(k);
+}
+// seçilen bölgeden tıkaç: dış sınırı taban çokgeni, girintisi derinlik olur
+// kapalı çokgeni eşit aralıkla örnekle ve yumuşat
+function cokgenYumusat(P0, adimIstek, tur) {
+  let cevre = 0; const n0 = P0.length; for (let i = 0; i < n0; i++) { const p = P0[i], q = P0[(i + 1) % n0]; cevre += Math.hypot(q[0] - p[0], q[1] - p[1]); }
+  const N = Math.max(24, Math.min(400, Math.round(cevre / adimIstek))); const adim = cevre / N;
+  const P = []; let i = 0, s = 0, kalan = 0;   // kalan: geçerli kenarda konum
+  for (let k = 0; k < N; k++) {
+    const hedef = k * adim;
+    while (true) { const p = P0[i % n0], q = P0[(i + 1) % n0]; const l = Math.hypot(q[0] - p[0], q[1] - p[1]); if (s + l >= hedef || i > 3 * n0) { const t = l > 0 ? (hedef - s) / l : 0; P.push([p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t]); break; } s += l; i++; }
+  }
+  let A = P;
+  for (let t = 0; t < tur; t++) A = A.map((p, j) => { const a = A[(j - 1 + N) % N], b = A[(j + 1) % N]; return [0.25 * a[0] + 0.5 * p[0] + 0.25 * b[0], 0.25 * a[1] + 0.5 * p[1] + 0.25 * b[1]]; });
+  return A.map(p => [+p[0].toFixed(3), +p[1].toFixed(3)]);
+}
+function bolgeTikac(k) {
+  const m = D.model, V = m.V, F = m.F, K = komsuluk(), b = k.bolge, S = b.secim, ic = b._ic; if (!S || !S.length) return;
+  // ağırlıklı normal ve merkez
+  let n = [0, 0, 0], c = [0, 0, 0], At = 0;
+  for (const t of S) {
+    const a = K.A[t]; n[0] += K.N[3 * t] * a; n[1] += K.N[3 * t + 1] * a; n[2] += K.N[3 * t + 2] * a;
+    for (let j = 0; j < 3; j++) { const v = F[3 * t + j] * 3; c[0] += V[v] * a / 3; c[1] += V[v + 1] * a / 3; c[2] += V[v + 2] * a / 3; }
+    At += a;
+  }
+  c = c.map(x => x / At); const nl = Math.hypot(...n); n = nl > 1e-9 ? n.map(x => x / nl) : [K.N[3 * S[0]], K.N[3 * S[0] + 1], K.N[3 * S[0] + 2]];
+  const yayilma = nl / At;   // 1: düz, 0: kapalı küre
+  // sınır kenarları (komşusu seçili olmayan), üçgen yönünde a->b
+  const ka = [], kb = [], cik = new Map();     // yönlü sınır kenarları; bir köşeden birden çok çıkabilir
+  for (const t of S) for (let j = 0; j < 3; j++) {
+    const a = F[3 * t + j], bb = F[3 * t + (j + 1) % 3]; const s = kenarKomsu(K, F, t, a, bb);
+    if (s < 0 || !ic[s]) { const e = ka.length; ka.push(a); kb.push(bb); let l = cik.get(a); if (!l) cik.set(a, l = []); l.push(e); }
+  }
+  const E = yardimci.eksen(c, n);
+  const uv = i => { const q = [V[3 * i] - c[0], V[3 * i + 1] - c[1], V[3 * i + 2] - c[2]]; return [v3.d(q, E.u), v3.d(q, E.v)]; };
+  // halkalar
+  const kul = new Uint8Array(ka.length); let enIyi = null, enAlan = 0; const tum = [];
+  for (let e0 = 0; e0 < ka.length; e0++) {
+    if (kul[e0]) continue; const h = []; let e = e0;
+    while (e >= 0) { kul[e] = 1; h.push(ka[e]); const l = cik.get(kb[e]); e = -1; if (l) for (const q of l) if (!kul[q]) { e = q; break; } }
+    if (h.length < 3) continue; tum.push(h);
+    const P = h.map(uv); let ar = 0; for (let i = 0; i < P.length; i++) { const p = P[i], q = P[(i + 1) % P.length]; ar += p[0] * q[1] - q[0] * p[1]; }
+    if (Math.abs(ar) > enAlan) { enAlan = Math.abs(ar); enIyi = P; }
+  }
+  // sınır çizgileri (önizleme)
+  const L = []; for (const h of tum) for (let i = 0; i < h.length; i++) { const a = h[i] * 3, q = h[(i + 1) % h.length] * 3; L.push(V[a], V[a + 1], V[a + 2], V[q], V[q + 1], V[q + 2]); }
+  b.sinir = new Float32Array(L);
+  // derinlik: bölgenin n boyunca uzandığı aralık
+  let wmin = Infinity, wmax = -Infinity;
+  for (const t of S) for (let j = 0; j < 3; j++) { const v = F[3 * t + j] * 3; const w = (V[v] - c[0]) * n[0] + (V[v + 1] - c[1]) * n[1] + (V[v + 2] - c[2]) * n[2]; if (w < wmin) wmin = w; if (w > wmax) wmax = w; }
+  // çevre halkasının dışı: sınırın hemen dışındaki yüzey ne kadar yukarıda (girinti)
+  let dudak = -Infinity; for (const h of tum) for (const i of h) for (let q = K.bas[i]; q < K.bas[i + 1]; q++) { const t = K.liste[q]; if (ic[t]) continue; for (let j = 0; j < 3; j++) { const v = F[3 * t + j] * 3; const w = (V[v] - c[0]) * n[0] + (V[v + 1] - c[1]) * n[1] + (V[v + 2] - c[2]) * n[2]; if (w > dudak) dudak = w; } }
+  let kenarW = -Infinity; for (const h of tum) for (const i of h) { const w = (V[3 * i] - c[0]) * n[0] + (V[3 * i + 1] - c[1]) * n[1] + (V[3 * i + 2] - c[2]) * n[2]; if (w > kenarW) kenarW = w; }
+  b.girinti = Number.isFinite(dudak) ? Math.max(0, dudak - kenarW) : 0;
+  if (!enIyi) { b.uyari = 'Bölgenin kenarı bulunamadı (kapalı yüzey). Hassasiyeti artır.'; k.nokta = null; return; }
+  // eşit aralıkla örnekle ve yumuşat: üçgen kenarlarının basamakları kesim yüzeyinde katlanma yapar
+  let cevre = 0; for (let i = 0; i < enIyi.length; i++) { const p = enIyi[i], q = enIyi[(i + 1) % enIyi.length]; cevre += Math.hypot(q[0] - p[0], q[1] - p[1]); }
+  const P = cokgenYumusat(enIyi, Math.max(0.3, cevre / 300), 6);
+  let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity; for (const p of P) { u0 = Math.min(u0, p[0]); u1 = Math.max(u1, p[0]); v0 = Math.min(v0, p[1]); v1 = Math.max(v1, p[1]); }
+  // tıkaç ekseni: merkez yüzeyin üstünde (wmax), derinlik bölgenin en altına + ek
+  Object.assign(k, { sekil: 'cokgen', noktalar: P, en: u1 - u0, boy: v1 - v0, aci: 0, kaydirU: 0, kaydirV: 0, yon: n, yuzeyNormali: n, yonMod: 'yuzey', yukari: undefined,
+    nokta: v3.top(c, v3.k(n, wmax)), derinlik: yuvarla((wmax - wmin) + b.ek, 3) });
+  b.uyari = yayilma < 0.55 ? 'Bölge çok kıvrık (kendi etrafında dönüyor); tek tıkaç olarak çıkmayabilir. Hassasiyeti düşür.' : tum.length > 1 && enAlan > 0 ? '' : '';
+  if (!k.hedefElle) k.hedef = parcaBul(v3.cik(c, v3.k(n, 0.3)), D.kesimler.indexOf(k));
+}
 function isinKesis(o, d) {
   const V = D.model.V, F = D.model.F; let en = Infinity, yuz = -1;
   for (let t = 0; t < F.length; t += 3) {
@@ -1692,6 +1910,7 @@ function tikla(x, y) {
   if (D.mod !== 'duzen' || !D.model) return; const k = seciliKesim(); if (!k) return;
   const { o, d } = Gor.isin(x, y); const h = isinKesis(o, d); if (!h) return;
   if (k.tip === 'duz') { k.konum = yuvarla(h.p['xyz'.indexOf(k.eksen)], 2); k.tikNokta = h.p; }
+  else if (k.mod === 'bolge') { bolgeSec(k, h.yuz / 3); }
   else if (k.mod === 'kanat') {
     const t = k.kanat.tik; if (t.length >= 4) return;
     t.push({ p: h.p, n: t.length < 2 ? ortalamaNormal(h.p, h.yuz, 0.6) : null });
@@ -1724,7 +1943,7 @@ async function nesneAc(secim) {
     const m = await is({ tip: 'nesneSec', secim }, 'Model açılıyor');
     const ad = s.ad + (secim === 'hepsi' ? '' : ' · ' + s.liste.filter(x => secim.includes(x.i)).map(x => x.ad).join(', '));
     $('#dosyaad').textContent = ad;
-    D.model = { ad: s.ad, V: m.V, F: m.F, lo: m.lo, hi: m.hi, parcalar: m.parcalar, kapali: m.kapali, hacim: m.hacim };
+    D.model = { ad: s.ad, V: m.V, F: m.F, lo: m.lo, hi: m.hi, parcalar: m.parcalar, kapali: m.kapali, hacim: m.hacim, renk: m.renk || null, filament: m.filament || null };
     D.mod = 'duzen'; D.sonuc = null; pimMerkezOnbellek = new Map(); D.kesimler = []; D.secili = null; D.sayac = 0;
     if (Gor) { Gor.sigdir(m.lo, m.hi); modelCiz(); }
     panelCiz(); onizleme();
@@ -1735,7 +1954,7 @@ async function modelYukle(ad, buf, ornekKesimler) {
   try {
     let m = await is({ tip: 'yukle', ad, buf }, 'Model açılıyor', [buf]);
     if (m.tip === 'secim') { D.secimListesi = { ad, liste: m.liste, ornekKesimler }; D.model = null; panelCiz(); return; }
-    D.model = { ad, V: m.V, F: m.F, lo: m.lo, hi: m.hi, parcalar: m.parcalar, kapali: m.kapali, hacim: m.hacim };
+    D.model = { ad, V: m.V, F: m.F, lo: m.lo, hi: m.hi, parcalar: m.parcalar, kapali: m.kapali, hacim: m.hacim, renk: m.renk || null, filament: m.filament || null };
     D.mod = 'duzen'; D.sonuc = null; pimMerkezOnbellek = new Map();
     D.kesimler = ornekKesimler || []; D.secili = D.kesimler[0] ? D.kesimler[0].id : null; D.sayac = D.kesimler.length;
     if (Gor) { Gor.sigdir(m.lo, m.hi); modelCiz(); }
@@ -1748,7 +1967,7 @@ async function calistir() {
   D.kesimler.forEach((k, i) => { if (k.tip === 'tikac' && k.nokta && k.yon && !k.hedefElle) k.hedef = parcaBul(v3.cik(k.nokta, v3.k(k.yon, Math.min(0.5, k.derinlik / 2))), i); });
   try {
     const adlar = { model: 'Ana gövde' }; D.kesimler.forEach(k => adlar[k.id] = k.ad);
-    const kesimler = D.kesimler.map(k => { const c = { ...k, hedefAd: adlar[k.hedef] }; delete c._oto; if (k.tip === 'duz') c.alanHazir = duzAlan(k); return c; });
+    const kesimler = D.kesimler.map(k => { const c = { ...k, hedefAd: adlar[k.hedef] }; delete c._oto; if (c.bolge) c.bolge = { modu: c.bolge.modu }; if (k.tip === 'duz') c.alanHazir = duzAlan(k); return c; });
     const r = await is({ tip: 'kes', kesimler, ayar: D.ayar }, 'Parçalanıyor');
     D.sonuc = { liste: r.liste, pimler: r.pimler, modelKusur: r.modelKusur, anaAd: 'Gövde' };
     D.mod = 'sonuc'; panelCiz(); onizleme(); sonucCiz();

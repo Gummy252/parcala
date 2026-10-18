@@ -111,8 +111,9 @@ function parcalaMotoru() {
       }
     }
     const F = new Buyuyen(Uint32Array, n);
-    for (let t = 0; t < n; t += 3) { const a = idx[t], b = idx[t + 1], c = idx[t + 2]; if (a !== b && b !== c && c !== a) F.it3(a, b, c); }
-    return { V: V.son(), F: F.son() };
+    const tut = new Buyuyen(Int32Array, n / 3);
+    for (let t = 0; t < n; t += 3) { const a = idx[t], b = idx[t + 1], c = idx[t + 2]; if (a !== b && b !== c && c !== a) { F.it3(a, b, c); tut.it(t / 3); } }
+    return { V: V.son(), F: F.son(), tut: tut.son() };
   }
 
   // ================================================================ STL
@@ -162,6 +163,21 @@ function parcalaMotoru() {
     }
     return R;
   }
+  // Bambu/Prusa boya kodu (TriangleSelector): onaltılık dizi sondan başa, her yarım bayt: alt 2 bit bölünme,
+  // üst 2 bit durum (yaprak) ya da özel kenar (bölünmüş); durum 3 ise sonraki yarım bayt + 3. Alanca baskın rengi döndürür.
+  function boyaCoz(h) {
+    const n = h.length; let i = 0; const ag = new Map();
+    const yb = () => (i < n ? parseInt(h[n - 1 - i++], 16) : 0);
+    function dugum(w, derin) {
+      if (i >= n || derin > 12) return;
+      const x = yb(); const bol = x & 3, ust = x >> 2;
+      if (bol === 0) { const st = ust === 3 ? yb() + 3 : ust; ag.set(st, (ag.get(st) || 0) + w); }
+      else { const c = bol + 1; for (let k = 0; k < c; k++) dugum(w / c, derin + 1); }
+    }
+    dugum(1, 0);
+    let en = 0, ew = -1; for (const [st, w] of ag) if (w > ew) { ew = w; en = st; }
+    return en;
+  }
   function modelCoz(metin) {
     const nesneler = new Map(); let i = 0;
     for (;;) {
@@ -175,10 +191,23 @@ function parcalaMotoru() {
         const vs = govde.slice(vi, govde.indexOf('</vertices>', vi)); const ts = govde.slice(ti, govde.indexOf('</triangles>', ti));
         const V = new Buyuyen(Float64Array, 1 << 16); const rv = /<vertex\s[^>]*?x="([^"]*)"[^>]*?y="([^"]*)"[^>]*?z="([^"]*)"/g; let m;
         while ((m = rv.exec(vs))) V.it3(+m[1], +m[2], +m[3]);
-        const F = new Buyuyen(Uint32Array, 1 << 16); const rt = /<triangle\s[^>]*?v1="(\d+)"[^>]*?v2="(\d+)"[^>]*?v3="(\d+)"/g;
-        while ((m = rt.exec(ts))) F.it3(+m[1], +m[2], +m[3]);
-        let boya = 0; let q = 0; while ((q = ts.indexOf('paint_color="', q)) >= 0) { if (ts[q + 13] !== '"') boya++; q += 13; }
-        n.mesh = { V: V.son(), F: F.son(), boya };
+        const F = new Buyuyen(Uint32Array, 1 << 16);
+        const boyaliMi = ts.indexOf('paint_color="') >= 0;
+        let renk = null, boya = 0;
+        if (!boyaliMi) { const rt = /<triangle\s[^>]*?v1="(\d+)"[^>]*?v2="(\d+)"[^>]*?v3="(\d+)"/g; while ((m = rt.exec(ts))) F.it3(+m[1], +m[2], +m[3]); }
+        else {
+          const R = new Buyuyen(Uint8Array, 1 << 16); const onb = new Map();
+          const rt = /<triangle\s([^>]*?)\/?>/g;
+          while ((m = rt.exec(ts))) {
+            const a = m[1]; const v1 = /v1="(\d+)"/.exec(a), v2 = /v2="(\d+)"/.exec(a), v3 = /v3="(\d+)"/.exec(a);
+            F.it3(+v1[1], +v2[1], +v3[1]);
+            const p = a.indexOf('paint_color="'); let st = 0;
+            if (p >= 0) { const e = a.indexOf('"', p + 13); const h = a.slice(p + 13, e); if (h) { st = onb.get(h); if (st === undefined) { st = boyaCoz(h); onb.set(h, st); } boya++; } }
+            R.it(st);
+          }
+          renk = R.son();
+        }
+        n.mesh = { V: V.son(), F: F.son(), boya, renk };
       }
       const rc = /<component\b([^>]*)\/>/g; let m;
       while ((m = rc.exec(govde))) { const c = attrs(m[1]); n.bilesen.push({ yol: c['p:path'], id: c.objectid, M: matris(c.transform) }); }
@@ -219,7 +248,7 @@ function parcalaMotoru() {
     async function gez(yol, id, M, ust, sira) {
       const { nesneler } = await model(yol); const n = nesneler.get(id); if (!n) return;
       const a = ayar.get(ust); const tur = a && a.parcalar[sira] ? a.parcalar[sira].tur : 'normal_part';
-      if (n.mesh && tur === 'normal_part') parcalar.push({ ad: n.ad, V: donustur(n.mesh.V, M), F: n.mesh.F, boya: n.mesh.boya, nesne: ust, sira });
+      if (n.mesh && tur === 'normal_part') parcalar.push({ ad: n.ad, V: donustur(n.mesh.V, M), F: n.mesh.F, boya: n.mesh.boya, renk: n.mesh.renk, nesne: ust, sira });
       let k = 0; for (const c of n.bilesen) { const kk = k++; const ta = a && a.parcalar[kk] ? a.parcalar[kk].tur : 'normal_part'; if (ust === id && ta !== 'normal_part') continue; await gez(c.yol ? c.yol.replace(/^\//, '') : yol, c.id, carp(M, c.M), ust, kk); }
     }
     for (const b of secilen) await gez(ana, b.id, b.M, b.id, 0);
@@ -227,6 +256,11 @@ function parcalaMotoru() {
       const a = ayar.get(p.nesne); p.ext = 1;
       if (a) { p.ext = a.ext; if (a.parcalar[p.sira]) { p.ad = a.parcalar[p.sira].ad || p.ad; p.ext = a.parcalar[p.sira].ext; } }
     }
+    // filament renkleri
+    let filament = null;
+    const ps = await z.oku('Metadata/project_settings.config');
+    if (ps) { const m2 = /"filament_colour"\s*:\s*\[([^\]]*)\]/.exec(td.decode(ps)); if (m2) filament = [...m2[1].matchAll(/"(#[0-9A-Fa-f]{6,8})"/g)].map(x => x[1].slice(0, 7)); }
+    parcalar.filament = filament;
     return parcalar;
   }
   function donustur(V, M) {
@@ -588,7 +622,8 @@ function parcalaMotoru() {
     const yerel = (u, v) => { const x = u - du, y = v - dv; return [x * ca + y * sa, -x * sa + y * ca]; };
     if (t.sekil === 'daire') { const r = t.yaricap || t.en / 2; return { sd: (u, v) => { const [x, y] = yerel(u, v); return Math.hypot(x, y) - r; }, kapsam: r + Math.hypot(du, dv) }; }
     let poly;
-    if (t.sekil === 'elips') { const a = t.en / 2, b = t.boy / 2; poly = []; for (let i = 0; i < 180; i++) { const q = 2 * Math.PI * i / 180; poly.push([a * Math.cos(q), b * Math.sin(q)]); } }
+    if (t.sekil === 'cokgen' && t.noktalar && t.noktalar.length >= 3) poly = t.noktalar.map(p => [p[0], p[1]]);
+    else if (t.sekil === 'elips') { const a = t.en / 2, b = t.boy / 2; poly = []; for (let i = 0; i < 180; i++) { const q = 2 * Math.PI * i / 180; poly.push([a * Math.cos(q), b * Math.sin(q)]); } }
     else { const a = t.en / 2, b = t.boy / 2; poly = [[-a, -b], [a, -b], [a, b], [-a, b]]; }
     const R = Math.max(...poly.map(p => Math.hypot(p[0], p[1])));
     return {
@@ -743,7 +778,7 @@ function parcalaMotoru() {
   // ================================================================ dosya yükleme (tam akış)
   async function yukle(ad, buf, ilerle, secim) {
     const uz = ad.toLowerCase().split('.').pop();
-    let V, F, parcalar;
+    let V, F, parcalar, renk = null, filament = null;
     if (uz === 'stl') { ilerle && ilerle('STL okunuyor'); ({ V, F } = stlOku(buf)); parcalar = [{ ad, ext: 1, boya: 0, nT: F.length / 3 }]; }
     else if (uz === '3mf') {
       if (secim == null) {
@@ -756,13 +791,19 @@ function parcalaMotoru() {
       let nv = 0, nf = 0; for (const p of ps) { nv += p.V.length; nf += p.F.length; }
       const P = new Float64Array(nf * 3); let o = 0;
       for (const p of ps) for (let i = 0; i < p.F.length; i++) { const v = p.F[i] * 3; P[o++] = p.V[v]; P[o++] = p.V[v + 1]; P[o++] = p.V[v + 2]; }
-      ({ V, F } = kaynakla(P));
+      const k = kaynakla(P); V = k.V; F = k.F;
+      // yüz başına renk (extruder no): boya varsa boyadan, yoksa parçanın extruder'ı
+      const ham = new Uint8Array(nf / 3); let o2 = 0;
+      for (const p of ps) { const nt = p.F.length / 3; for (let t = 0; t < nt; t++) ham[o2++] = (p.renk && p.renk[t]) ? p.renk[t] : p.ext; }
+      const farkli = new Set(ham); 
+      if (farkli.size > 1) { renk = new Uint8Array(k.tut.length); for (let t = 0; t < k.tut.length; t++) renk[t] = ham[k.tut[t]]; }
+      filament = ps.filament;
       parcalar = ps.map(p => ({ ad: p.ad, ext: p.ext, boya: p.boya, nT: p.F.length / 3 }));
     } else throw new Error('Sadece .stl ve .3mf dosyaları açılabilir');
     // model koordinatı: XY ortalı, en alt Z=0
     const { lo, hi } = sinirlar(V); const tx = -(lo[0] + hi[0]) / 2, ty = -(lo[1] + hi[1]) / 2, tz = -lo[2];
     for (let i = 0; i < V.length; i += 3) { V[i] += tx; V[i + 1] += ty; V[i + 2] += tz; }
-    return { V, F, parcalar };
+    return { V, F, parcalar, renk, filament };
   }
 
   return { yukle, kes, guvenliKes, eksen, tikacKes, duzKes, kesitMerkezi, pimMesh, hacim, kapaliMi, sinirlar, stlYaz, ucmfYaz, zipYaz, delaunay, kaynakla, stlOku, tabanSekli };

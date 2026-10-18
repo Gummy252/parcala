@@ -186,11 +186,17 @@ function isciAna(M, gonder) {
             if (r.pim) pimler.push({ ad: k.ad, r: r.pim.r, L: r.pim.L });
           } else {
             if (!k.nokta) throw new Error(`"${k.ad}": modelde yer seçilmedi`);
-            const r = M.tikacKes(src.V, src.F, {
-              nokta: k.nokta, yon: k.yon, yukari: k.yukari || undefined, derinlik: k.derinlik, duvar: k.duvar, icPay: k.icPay,
+            // akıllı seçimde kesim duvarı bölgenin yan duvarıyla çakışabilir: olmazsa sınırı biraz dışarı/içeri alıp yeniden dene
+            const paylar = k.mod === 'bolge' ? [k.icPay, k.icPay - 0.25, k.icPay + 0.25, k.icPay - 0.5] : [k.icPay];
+            let r, sonHata;
+            for (const icPay of paylar) {
+              try { r = M.tikacKes(src.V, src.F, {
+              nokta: k.nokta, yon: k.yon, yukari: k.yukari || undefined, derinlik: k.derinlik, duvar: k.duvar, icPay,
               taban: { sekil: k.sekil, en: k.en, boy: k.boy, aci: k.aci, kaydirU: k.kaydirU, kaydirV: k.kaydirV, noktalar: k.noktalar },
               anahtar: k.anahtar ? { u: k.kaydirU, v: k.kaydirV + Math.min(k.en, k.boy) * 0.22, cap: Math.max(1.6, Math.min(2.6, Math.min(k.en, k.boy) * 0.2)), derinlik: 1.0 } : null
-            }, ayar);
+            }, ayar); break; } catch (e) { sonHata = e; if (paylar.length > 1) gonder({ tip: 'ilerle', yazi: `"${k.ad}": kesim sınırı ayarlanıp yeniden deneniyor`, oran: 0.5 }); }
+            }
+            if (!r) throw sonHata;
             if (!r.parca) throw new Error(`"${k.ad}": tıkaç "${k.hedefAd || 'seçilen'}" parçasına değmiyor. Tıkladığın yer başka bir parçada kalıyor olabilir: "Kesilecek parça"yı kontrol et ya da yeri yeniden seç.`);
             if (!r.kalan) throw new Error(`"${k.ad}": tıkaç hedef parçanın tamamını kaplıyor. Tabanı küçült ya da derinliği azalt.`);
             parcalar.set(k.id, r.parca); parcalar.set(k.hedef, r.kalan);
@@ -460,7 +466,8 @@ function kesimHTML(k, i) {
           ${sayiAlan('dw_' + k.id, 'Duvar dikliği', k.duvar, 2, 40, 1)}
           ${sayiAlan('ip_' + k.id, 'Kenar payı (mm)', k.icPay, 0, 1, 0.01)}
         </div></details>`;
-        g += `<div class="tam satir"><button type="button" class="btn kucuk" id="bt_${k.id}">Seçimi temizle</button></div>`;
+        g += `<div class="tam satir"><button type="button" class="btn kucuk" id="bb_${k.id}">Dış kenara büyüt</button><button type="button" class="btn kucuk" id="bg_${k.id}" ${b.gecmis && b.gecmis.length ? '' : 'disabled'}>Geri al</button><button type="button" class="btn kucuk" id="bt_${k.id}">Seçimi temizle</button></div>`;
+        g += `<div class="tam bilgi">"Dış kenara büyüt" seçimi bir sonraki kenara kadar genişletir (camı çerçevesiyle almak için). <b>Shift</b> basılıyken tıklarsan o bölge seçime eklenir.</div>`;
       } else g += `<div class="tam bilgi">${b.modu === 'renk' ? 'Ayırmak istediğin renkli bölgeye tıkla (ör. vizör). Aynı renkteki bitişik yüzey seçilir.' : 'Ayırmak istediğin bölgeye tıkla. Seçim, keskin kenara (girintinin dudağına) kadar yayılır.'}</div>`;
     } else if (k.mod === 'kanat') {
       const n = k.kanat.tik.length; const adimlar = ['Kanadın bir yüzüne tıkla', 'Kanadın öbür yüzüne tıkla', 'Kanadın bir ucuna tıkla (gövdeye bağlandığı uç)', 'Kanadın öbür ucuna tıkla (en uzak uç)'];
@@ -613,7 +620,9 @@ function baglaPanel() {
       if (e('ba_' + k.id)) { baglaSayi('ba_' + k.id, v => { b.aci = v; clearTimeout(b._z); b._z = setTimeout(yenile, 250); }); }
       if (e('be_' + k.id)) baglaSayi('be_' + k.id, v => { b.ek = v; bolgeTikac(k); onizleme(); });
       for (const [p, alan] of [['dw_', 'duvar'], ['ip_', 'icPay']]) if (e(p + k.id)) baglaSayi(p + k.id, v => yaz(alan, v));
-      if (e('bt_' + k.id)) e('bt_' + k.id).onclick = () => { Object.assign(b, { tohum: null, secim: null }); k.nokta = null; k.yon = null; k.noktalar = null; panelCiz(); onizleme(); };
+      if (e('bb_' + k.id)) e('bb_' + k.id).onclick = () => { bolgeBuyut(k); panelCiz(); onizleme(); };
+      if (e('bg_' + k.id)) e('bg_' + k.id).onclick = () => { bolgeGeri(k); panelCiz(); onizleme(); };
+      if (e('bt_' + k.id)) e('bt_' + k.id).onclick = () => { Object.assign(b, { tohum: null, secim: null, _ic: null, gecmis: [] }); k.nokta = null; k.yon = null; k.noktalar = null; panelCiz(); onizleme(); };
       return;
     }
     if (k.mod === 'kanat') {
@@ -931,7 +940,7 @@ function sonucCiz() {
     Gor.yenile();
   });
   tuval.addEventListener('pointerup', e => {
-    if (surukle && !iki && Math.hypot(e.clientX - surukle.x0, e.clientY - surukle.y0) < 5 && surukle.b === 0) tikla(e.clientX, e.clientY);
+    if (surukle && !iki && Math.hypot(e.clientX - surukle.x0, e.clientY - surukle.y0) < 5 && surukle.b === 0) tikla(e.clientX, e.clientY, e.shiftKey);
     surukle = null;
   });
   tuval.addEventListener('wheel', e => { e.preventDefault(); kam.uzak *= Math.exp(e.deltaY * 0.0012); Gor.yenile(); }, { passive: false });
@@ -984,31 +993,56 @@ function kenarKomsu(K, F, t, a, b) {
   for (let i = K.bas[a]; i < K.bas[a + 1]; i++) { const s = K.liste[i]; if (s === t) continue; const o = 3 * s; if (F[o] === b || F[o + 1] === b || F[o + 2] === b) return s; }
   return -1;
 }
-function bolgeSec(k, tohum) {
-  const m = D.model, F = m.F, K = komsuluk(), b = k.bolge; const nf = F.length / 3;
-  b.tohum = tohum;
-  const renkli = b.modu === 'renk' && m.renk; const R = m.renk; const r0 = renkli ? R[tohum] : 0;
-  const cosA = Math.cos(b.aci * Math.PI / 180), N = K.N;
-  const ic = new Uint8Array(nf); ic[tohum] = 1; const kuyruk = [tohum]; const S = [];
-  const n0 = [N[3 * tohum], N[3 * tohum + 1], N[3 * tohum + 2]];
-  while (kuyruk.length) {
-    const t = kuyruk.pop(); S.push(t);
-    for (let c = 0; c < 3; c++) {
-      const a = F[3 * t + c], bb = F[3 * t + (c + 1) % 3]; const s = kenarKomsu(K, F, t, a, bb); if (s < 0 || ic[s]) continue;
-      if (renkli) { if (R[s] !== r0) continue; }
-      else {
-        const d = N[3 * t] * N[3 * s] + N[3 * t + 1] * N[3 * s + 1] + N[3 * t + 2] * N[3 * s + 2]; if (d < cosA) continue;
-        // yavaş kıvrılan geniş yüzeylerde taşmasın: tohum yüzeyinden 85°'den fazla dönme
-        if (n0[0] * N[3 * s] + n0[1] * N[3 * s + 1] + n0[2] * N[3 * s + 2] < 0.08) continue;
+// tohumlardan taşma: renk modunda aynı boya, kenar modunda keskin kenara kadar
+function bolgeYay(k, tohumlar, n0, minDot) {
+  const m = D.model, F = m.F, K = komsuluk(), b = k.bolge, N = K.N, ic = b._ic;
+  const renkli = b.modu === 'renk' && m.renk; const R = m.renk; const cosA = Math.cos(b.aci * Math.PI / 180);
+  let eklenen = 0;
+  for (const tohum of tohumlar) {
+    if (ic[tohum]) continue; const r0 = renkli ? R[tohum] : 0; const n = n0 || [N[3 * tohum], N[3 * tohum + 1], N[3 * tohum + 2]];
+    ic[tohum] = 1; eklenen++; const kuyruk = [tohum];
+    while (kuyruk.length) {
+      const t = kuyruk.pop();
+      for (let c = 0; c < 3; c++) {
+        const s = kenarKomsu(K, F, t, F[3 * t + c], F[3 * t + (c + 1) % 3]); if (s < 0 || ic[s]) continue;
+        if (renkli) { if (R[s] !== r0) continue; }
+        else {
+          if (N[3 * t] * N[3 * s] + N[3 * t + 1] * N[3 * s + 1] + N[3 * t + 2] * N[3 * s + 2] < cosA) continue;
+          // yavaş kıvrılan geniş yüzeylerde taşmasın
+          if (n[0] * N[3 * s] + n[1] * N[3 * s + 1] + n[2] * N[3 * s + 2] < minDot) continue;
+        }
+        ic[s] = 1; eklenen++; kuyruk.push(s);
       }
-      ic[s] = 1; kuyruk.push(s);
     }
   }
-  b.secim = Int32Array.from(S); b.sayi = S.length; b._ic = ic;
+  return eklenen;
+}
+function bolgeBitir(k) {
+  const m = D.model, R = m.renk, b = k.bolge, ic = b._ic; const S = [];
+  for (let t = 0; t < ic.length; t++) if (ic[t]) S.push(t);
+  b.secim = Int32Array.from(S); b.sayi = S.length;
   // boyalı modelde parçanın rengini bölgenin baskın boyasından al
   if (R && !k.renkElle) { const say = new Map(); for (const t of S) say.set(R[t], (say.get(R[t]) || 0) + 1); let en = 0, ec = 0; for (const [c, n] of say) if (n > en) { en = n; ec = c; } k.renk = enYakinRenk(filamentRgb(ec)); }
   bolgeTikac(k);
 }
+function bolgeSec(k, tohum, ekle) {
+  const b = k.bolge; const nf = D.model.F.length / 3;
+  if (ekle && b._ic) { b.gecmis = b.gecmis || []; b.gecmis.push(b._ic.slice()); }
+  else { b._ic = new Uint8Array(nf); b.gecmis = []; b.tohum = tohum; }
+  bolgeYay(k, [tohum], null, 0.08);
+  bolgeBitir(k);
+}
+// bir sonraki keskin kenara kadar dışarı büyüt (camın çerçevesini de almak gibi)
+function bolgeBuyut(k) {
+  const m = D.model, F = m.F, K = komsuluk(), b = k.bolge, ic = b._ic; if (!ic) return 0;
+  const once = ic.slice(); const tohumlar = [];
+  for (const t of b.secim) for (let c = 0; c < 3; c++) { const s = kenarKomsu(K, F, t, F[3 * t + c], F[3 * t + (c + 1) % 3]); if (s >= 0 && !once[s]) tohumlar.push(s); }
+  if (!tohumlar.length) return 0;
+  b.gecmis = b.gecmis || []; b.gecmis.push(once);
+  const n = bolgeYay(k, tohumlar, k.yon, -0.3);
+  bolgeBitir(k); return n;
+}
+function bolgeGeri(k) { const b = k.bolge; if (!b.gecmis || !b.gecmis.length) return; b._ic = b.gecmis.pop(); bolgeBitir(k); }
 // seçilen bölgeden tıkaç: dış sınırı taban çokgeni, girintisi derinlik olur
 // kapalı çokgeni eşit aralıkla örnekle ve yumuşat
 function cokgenYumusat(P0, adimIstek, tur) {
@@ -1096,11 +1130,11 @@ function ortalamaNormal(p, yuz, r) {
   }
   return Math.hypot(...s) > 0 ? v3.n(s) : n0;
 }
-function tikla(x, y) {
+function tikla(x, y, shift) {
   if (D.mod !== 'duzen' || !D.model) return; const k = seciliKesim(); if (!k) return;
   const { o, d } = Gor.isin(x, y); const h = isinKesis(o, d); if (!h) return;
   if (k.tip === 'duz') { k.konum = yuvarla(h.p['xyz'.indexOf(k.eksen)], 2); k.tikNokta = h.p; }
-  else if (k.mod === 'bolge') { bolgeSec(k, h.yuz / 3); }
+  else if (k.mod === 'bolge') { bolgeSec(k, h.yuz / 3, shift && !!k.bolge.secim); }
   else if (k.mod === 'kanat') {
     const t = k.kanat.tik; if (t.length >= 4) return;
     t.push({ p: h.p, n: t.length < 2 ? ortalamaNormal(h.p, h.yuz, 0.6) : null });

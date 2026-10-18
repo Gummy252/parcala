@@ -460,12 +460,14 @@ function kesimHTML(k, i) {
       if (b.modu === 'renk' && !(D.model && D.model.renk)) g += `<div class="tam bilgi">Bu modelde boya bilgisi yok. "Kenara / derinliğe göre" seç.</div>`;
       if (b.modu === 'kenar') g += sayiAlan('ba_' + k.id, 'Hassasiyet: bu açıdan keskin kenarda dur (°)', b.aci, 3, 80, 1, 'tam');
       if (b.secim) {
-        g += `<div class="tam bilgi">Seçili: <span class="sayi">${b.sayi.toLocaleString('tr-TR')}</span> üçgen · <span class="sayi">${k.en.toFixed(1)} × ${k.boy.toFixed(1)}</span> mm · girinti <span class="sayi">${b.girinti.toFixed(2)}</span> mm${b.uyari ? `<br><b>${esc(b.uyari)}</b>` : ''}</div>`;
+        g += `<div class="tam bilgi">Seçili: <span class="sayi">${b.sayi.toLocaleString('tr-TR')}</span> üçgen · <span class="sayi">${k.en.toFixed(1)} × ${k.boy.toFixed(1)}</span> mm ${b.cikinti ? ' · <b>çıkıntı</b>: kökünden ayrılacak' : ` · girinti <span class="sayi">${b.girinti.toFixed(2)}</span> mm`}${b.uyari ? `<br><b>${esc(b.uyari)}</b>` : ''}</div>`;
         g += sayiAlan('be_' + k.id, 'Tıkaç dili: bölgenin altına ek derinlik (mm)', b.ek, 0.5, 15, 0.05, 'tam');
         g += `<details class="tam"><summary>İnce ayar</summary><div class="izgara" style="grid-template-columns:1fr 1fr">
           ${sayiAlan('dw_' + k.id, 'Duvar dikliği', k.duvar, 2, 40, 1)}
           ${sayiAlan('ip_' + k.id, 'Kenar payı (mm)', k.icPay, 0, 1, 0.01)}
         </div></details>`;
+        if (b.tasti) g += `<div class="tam bilgi"><b>Büyütme gövdeye taştı, yapılmadı.</b> Bu bölgenin dışındaki kenar yumuşak; Shift basılıyken eklemek istediğin yüzeye tıkla.</div>`;
+        if (b.kanatOneri) g += `<div class="tam bilgi"><b>Bu ince bir kanat gibi görünüyor</b> (kalınlık <span class="sayi">${b.kanatOneri.T.toFixed(2)}</span> mm). Tek yüzü değil, kanadın tamamını kökünden dilli ayırmak için:</div><div class="tam"><button type="button" class="btn ana kucuk" id="bk_${k.id}">Kanat olarak ayır</button></div>`;
         g += `<div class="tam satir"><button type="button" class="btn kucuk" id="bb_${k.id}">Dış kenara büyüt</button><button type="button" class="btn kucuk" id="bg_${k.id}" ${b.gecmis && b.gecmis.length ? '' : 'disabled'}>Geri al</button><button type="button" class="btn kucuk" id="bt_${k.id}">Seçimi temizle</button></div>`;
         g += `<div class="tam bilgi">"Dış kenara büyüt" seçimi bir sonraki kenara kadar genişletir (camı çerçevesiyle almak için). <b>Shift</b> basılıyken tıklarsan o bölge seçime eklenir.</div>`;
       } else g += `<div class="tam bilgi">${b.modu === 'renk' ? 'Ayırmak istediğin renkli bölgeye tıkla (ör. vizör). Aynı renkteki bitişik yüzey seçilir.' : 'Ayırmak istediğin bölgeye tıkla. Seçim, keskin kenara (girintinin dudağına) kadar yayılır.'}</div>`;
@@ -621,6 +623,7 @@ function baglaPanel() {
       if (e('be_' + k.id)) baglaSayi('be_' + k.id, v => { b.ek = v; bolgeTikac(k); onizleme(); });
       for (const [p, alan] of [['dw_', 'duvar'], ['ip_', 'icPay']]) if (e(p + k.id)) baglaSayi(p + k.id, v => yaz(alan, v));
       if (e('bb_' + k.id)) e('bb_' + k.id).onclick = () => { bolgeBuyut(k); panelCiz(); onizleme(); };
+      if (e('bk_' + k.id)) e('bk_' + k.id).onclick = () => { kanataCevir(k); panelCiz(); onizleme(); };
       if (e('bg_' + k.id)) e('bg_' + k.id).onclick = () => { bolgeGeri(k); panelCiz(); onizleme(); };
       if (e('bt_' + k.id)) e('bt_' + k.id).onclick = () => { Object.assign(b, { tohum: null, secim: null, _ic: null, gecmis: [] }); k.nokta = null; k.yon = null; k.noktalar = null; panelCiz(); onizleme(); };
       return;
@@ -1039,10 +1042,22 @@ function bolgeBuyut(k) {
   for (const t of b.secim) for (let c = 0; c < 3; c++) { const s = kenarKomsu(K, F, t, F[3 * t + c], F[3 * t + (c + 1) % 3]); if (s >= 0 && !once[s]) tohumlar.push(s); }
   if (!tohumlar.length) return 0;
   b.gecmis = b.gecmis || []; b.gecmis.push(once);
+  const alan = x => { let s = 0; for (let t = 0; t < x.length; t++) if (x[t]) s += K.A[t]; return s; };
+  const a0 = alan(once);
   const n = bolgeYay(k, tohumlar, k.yon, -0.3);
-  bolgeBitir(k); return n;
+  // gövdeye taştıysa (yumuşak geçiş) geri al
+  if (alan(ic) > a0 * 6) { b._ic = b.gecmis.pop(); b.tasti = true; return 0; }
+  b.tasti = false; bolgeBitir(k); return n;
 }
-function bolgeGeri(k) { const b = k.bolge; if (!b.gecmis || !b.gecmis.length) return; b._ic = b.gecmis.pop(); bolgeBitir(k); }
+function kanataCevir(k) {
+  const o = k.bolge.kanatOneri; if (!o) return;
+  const nb = v3.k(o.n, -1);
+  Object.assign(k, { mod: 'kanat', kanat: { tik: [{ p: o.p0, n: o.n }, { p: v3.top(o.p0, v3.k(nb, o.T)), n: nb }, { p: o.pa, n: null }, { p: o.pb, n: null }], kalinlik: o.T },
+    sekil: 'dikdortgen', noktalar: null, derinlik: 2.5, duvar: 12, icPay: 0.2, anahtar: false, yukari: undefined });
+  delete k.bolge;
+  kanatHesapla(k); const i = D.kesimler.indexOf(k); if (!k.hedefElle) k.hedef = parcaBul(k.kanat.orta, i);
+}
+function bolgeGeri(k) { const b = k.bolge; b.tasti = false; if (!b.gecmis || !b.gecmis.length) return; b._ic = b.gecmis.pop(); bolgeBitir(k); }
 // seçilen bölgeden tıkaç: dış sınırı taban çokgeni, girintisi derinlik olur
 // kapalı çokgeni eşit aralıkla örnekle ve yumuşat
 function cokgenYumusat(P0, adimIstek, tur) {
@@ -1074,37 +1089,112 @@ function bolgeTikac(k) {
     const a = F[3 * t + j], bb = F[3 * t + (j + 1) % 3]; const s = kenarKomsu(K, F, t, a, bb);
     if (s < 0 || !ic[s]) { const e = ka.length; ka.push(a); kb.push(bb); let l = cik.get(a); if (!l) cik.set(a, l = []); l.push(e); }
   }
-  const E = yardimci.eksen(c, n);
-  const uv = i => { const q = [V[3 * i] - c[0], V[3 * i + 1] - c[1], V[3 * i + 2] - c[2]]; return [v3.d(q, E.u), v3.d(q, E.v)]; };
-  // halkalar
-  const kul = new Uint8Array(ka.length); let enIyi = null, enAlan = 0; const tum = [];
+  // halkalar (3B)
+  const kul = new Uint8Array(ka.length); const tum = [];
   for (let e0 = 0; e0 < ka.length; e0++) {
     if (kul[e0]) continue; const h = []; let e = e0;
     while (e >= 0) { kul[e] = 1; h.push(ka[e]); const l = cik.get(kb[e]); e = -1; if (l) for (const q of l) if (!kul[q]) { e = q; break; } }
-    if (h.length < 3) continue; tum.push(h);
-    const P = h.map(uv); let ar = 0; for (let i = 0; i < P.length; i++) { const p = P[i], q = P[(i + 1) % P.length]; ar += p[0] * q[1] - q[0] * p[1]; }
-    if (Math.abs(ar) > enAlan) { enAlan = Math.abs(ar); enIyi = P; }
+    if (h.length >= 3) tum.push(h);
+  }
+  if (!tum.length) { b.uyari = 'Bölgenin kenarı bulunamadı (kapalı yüzey). Hassasiyeti düşür.'; k.nokta = null; b.sinir = null; return; }
+  tum.sort((x, y) => y.length - x.length);
+  // çıkıntı mı? (kanat, kulak gibi: yüzeyler birbirini götürür) -> yön: kökten bölgenin ortasına
+  b.cikinti = false;
+  if (yayilma < 0.5) {
+    const kok = [0, 0, 0]; for (const i of tum[0]) { kok[0] += V[3 * i]; kok[1] += V[3 * i + 1]; kok[2] += V[3 * i + 2]; }
+    const kc = kok.map(x => x / tum[0].length); const d = v3.cik(c, kc);
+    if (Math.hypot(...d) > 1e-6) { n = v3.n(d); b.cikinti = true; }
   }
   // sınır çizgileri (önizleme)
   const L = []; for (const h of tum) for (let i = 0; i < h.length; i++) { const a = h[i] * 3, q = h[(i + 1) % h.length] * 3; L.push(V[a], V[a + 1], V[a + 2], V[q], V[q + 1], V[q + 2]); }
   b.sinir = new Float32Array(L);
+  const E = yardimci.eksen(c, n);
+  const wOf = v => (V[v] - c[0]) * n[0] + (V[v + 1] - c[1]) * n[1] + (V[v + 2] - c[2]) * n[2];
   // derinlik: bölgenin n boyunca uzandığı aralık
   let wmin = Infinity, wmax = -Infinity;
-  for (const t of S) for (let j = 0; j < 3; j++) { const v = F[3 * t + j] * 3; const w = (V[v] - c[0]) * n[0] + (V[v + 1] - c[1]) * n[1] + (V[v + 2] - c[2]) * n[2]; if (w < wmin) wmin = w; if (w > wmax) wmax = w; }
-  // çevre halkasının dışı: sınırın hemen dışındaki yüzey ne kadar yukarıda (girinti)
-  let dudak = -Infinity; for (const h of tum) for (const i of h) for (let q = K.bas[i]; q < K.bas[i + 1]; q++) { const t = K.liste[q]; if (ic[t]) continue; for (let j = 0; j < 3; j++) { const v = F[3 * t + j] * 3; const w = (V[v] - c[0]) * n[0] + (V[v + 1] - c[1]) * n[1] + (V[v + 2] - c[2]) * n[2]; if (w > dudak) dudak = w; } }
-  let kenarW = -Infinity; for (const h of tum) for (const i of h) { const w = (V[3 * i] - c[0]) * n[0] + (V[3 * i + 1] - c[1]) * n[1] + (V[3 * i + 2] - c[2]) * n[2]; if (w > kenarW) kenarW = w; }
+  for (const t of S) for (let j = 0; j < 3; j++) { const w = wOf(F[3 * t + j] * 3); if (w < wmin) wmin = w; if (w > wmax) wmax = w; }
+  let dudak = -Infinity; for (const h of tum) for (const i of h) for (let q = K.bas[i]; q < K.bas[i + 1]; q++) { const t = K.liste[q]; if (ic[t]) continue; for (let j = 0; j < 3; j++) { const w = wOf(F[3 * t + j] * 3); if (w > dudak) dudak = w; } }
+  let kenarW = -Infinity; for (const h of tum) for (const i of h) { const w = wOf(3 * i); if (w > kenarW) kenarW = w; }
   b.girinti = Number.isFinite(dudak) ? Math.max(0, dudak - kenarW) : 0;
-  if (!enIyi) { b.uyari = 'Bölgenin kenarı bulunamadı (kapalı yüzey). Hassasiyeti artır.'; k.nokta = null; return; }
-  // eşit aralıkla örnekle ve yumuşat: üçgen kenarlarının basamakları kesim yüzeyinde katlanma yapar
-  let cevre = 0; for (let i = 0; i < enIyi.length; i++) { const p = enIyi[i], q = enIyi[(i + 1) % enIyi.length]; cevre += Math.hypot(q[0] - p[0], q[1] - p[1]); }
-  const P = cokgenYumusat(enIyi, Math.max(0.3, cevre / 300), 6);
+  // taban şekli: seçilen yüzeyin n yönünden görünen silueti (ızgaraya boya, dış çizgiyi çıkar)
+  const P0 = siluet(S, F, V, c, E);
+  if (!P0) { b.uyari = 'Bölgenin şekli çıkarılamadı.'; k.nokta = null; return; }
+  let cevre = 0; for (let i = 0; i < P0.length; i++) { const p = P0[i], q = P0[(i + 1) % P0.length]; cevre += Math.hypot(q[0] - p[0], q[1] - p[1]); }
+  const P = cokgenYumusat(P0, Math.max(0.3, cevre / 300), 6);
   let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity; for (const p of P) { u0 = Math.min(u0, p[0]); u1 = Math.max(u1, p[0]); v0 = Math.min(v0, p[1]); v1 = Math.max(v1, p[1]); }
   // tıkaç ekseni: merkez yüzeyin üstünde (wmax), derinlik bölgenin en altına + ek
   Object.assign(k, { sekil: 'cokgen', noktalar: P, en: u1 - u0, boy: v1 - v0, aci: 0, kaydirU: 0, kaydirV: 0, yon: n, yuzeyNormali: n, yonMod: 'yuzey', yukari: undefined,
     nokta: v3.top(c, v3.k(n, wmax)), derinlik: yuvarla((wmax - wmin) + b.ek, 3) });
-  b.uyari = yayilma < 0.55 ? 'Bölge çok kıvrık (kendi etrafında dönüyor); tek tıkaç olarak çıkmayabilir. Hassasiyeti düşür.' : tum.length > 1 && enAlan > 0 ? '' : '';
+  b.uyari = ''; b.kanatOneri = null;
   if (!k.hedefElle) k.hedef = parcaBul(v3.cik(c, v3.k(n, 0.3)), D.kesimler.indexOf(k));
+  // düz ve ince bir duvarın tek yüzü mü? (kanat): arkasındaki yüzeye kadar kalınlığı ölç
+  if (!b.cikinti && yayilma > 0.85 && b.tohum != null) {
+    const t0 = b.tohum; let p0 = [0, 0, 0]; for (let j = 0; j < 3; j++) { const v = F[3 * t0 + j] * 3; p0[0] += V[v] / 3; p0[1] += V[v + 1] / 3; p0[2] += V[v + 2] / 3; }
+    const h = isinKesis(v3.cik(p0, v3.k(n, 0.02)), v3.k(n, -1));
+    if (h) {
+      const T = v3.d(v3.cik(p0, h.p), n);
+      if (T > 0.3 && T < 0.3 * Math.min(k.en, k.boy)) {
+        const mc = [(m.lo[0] + m.hi[0]) / 2, (m.lo[1] + m.hi[1]) / 2, (m.lo[2] + m.hi[2]) / 2];
+        let r = v3.cik(c, mc); r = v3.cik(r, v3.k(n, v3.d(r, n))); const e0 = Math.hypot(...r) > 1e-6 ? v3.n(v3.c(n, r)) : E.u;
+        let pa = null, pb = null, ea = Infinity, eb = -Infinity;
+        for (const hh of tum) for (const i of hh) { const p = [V[3 * i], V[3 * i + 1], V[3 * i + 2]]; const s = v3.d(p, e0); if (s < ea) { ea = s; pa = p; } if (s > eb) { eb = s; pb = p; } }
+        b.kanatOneri = { T, p0, n, pa, pb };
+      }
+    }
+  }
+}
+// seçili üçgenlerin E düzlemine izdüşümünün dış çizgisi (delikler doldurulur)
+function siluet(S, F, V, c, E) {
+  const nf = S.length; const PU = new Float32Array(nf * 3), PV = new Float32Array(nf * 3);
+  let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
+  for (let i = 0; i < nf; i++) for (let j = 0; j < 3; j++) {
+    const v = F[3 * S[i] + j] * 3; const qx = V[v] - c[0], qy = V[v + 1] - c[1], qz = V[v + 2] - c[2];
+    const u = qx * E.u[0] + qy * E.u[1] + qz * E.u[2], w = qx * E.v[0] + qy * E.v[1] + qz * E.v[2];
+    PU[3 * i + j] = u; PV[3 * i + j] = w; if (u < u0) u0 = u; if (u > u1) u1 = u; if (w < v0) v0 = w; if (w > v1) v1 = w;
+  }
+  const h = Math.max((Math.max(u1 - u0, v1 - v0)) / 500, 0.05); const pad = 3;
+  const W = Math.ceil((u1 - u0) / h) + 2 * pad + 1, H = Math.ceil((v1 - v0) / h) + 2 * pad + 1;
+  const G = new Uint8Array(W * H); const gx = u => (u - u0) / h + pad, gy = v => (v - v0) / h + pad;
+  const isle = (x, y) => { const i = Math.floor(x), j = Math.floor(y); if (i >= 0 && j >= 0 && i < W && j < H) G[j * W + i] = 1; };
+  for (let i = 0; i < nf; i++) {
+    const ax = gx(PU[3 * i]), ay = gy(PV[3 * i]), bx = gx(PU[3 * i + 1]), by = gy(PV[3 * i + 1]), cx = gx(PU[3 * i + 2]), cy = gy(PV[3 * i + 2]);
+    // kenarlar (ince üçgenler kaçmasın)
+    for (const [px, py, qx, qy] of [[ax, ay, bx, by], [bx, by, cx, cy], [cx, cy, ax, ay]]) { const m = Math.max(1, Math.ceil(Math.hypot(qx - px, qy - py) * 2)); for (let s = 0; s <= m; s++) isle(px + (qx - px) * s / m, py + (qy - py) * s / m); }
+    // iç
+    const x0 = Math.floor(Math.min(ax, bx, cx)), x1 = Math.ceil(Math.max(ax, bx, cx)), y0 = Math.floor(Math.min(ay, by, cy)), y1 = Math.ceil(Math.max(ay, by, cy));
+    if ((x1 - x0) * (y1 - y0) <= 4) continue;
+    const d = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax); if (Math.abs(d) < 1e-9) continue;
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      const px = x + 0.5, py = y + 0.5;
+      const l1 = ((bx - px) * (cy - py) - (by - py) * (cx - px)) / d, l2 = ((cx - px) * (ay - py) - (cy - py) * (ax - px)) / d;
+      if (l1 >= 0 && l2 >= 0 && l1 + l2 <= 1) isle(x, y);
+    }
+  }
+  // kapat: 1 hücre genişlet, dışarıyı doldurup delikleri kapat, 1 hücre daralt
+  const gen = new Uint8Array(W * H);
+  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) { const i = y * W + x; if (G[i] || G[i - 1] || G[i + 1] || G[i - W] || G[i + W]) gen[i] = 1; }
+  const dis = new Uint8Array(W * H); const yig = [0]; dis[0] = 1;
+  while (yig.length) { const i = yig.pop(); const x = i % W, y = (i / W) | 0; for (const j of [x > 0 ? i - 1 : -1, x < W - 1 ? i + 1 : -1, y > 0 ? i - W : -1, y < H - 1 ? i + W : -1]) if (j >= 0 && !dis[j] && !gen[j]) { dis[j] = 1; yig.push(j); } }
+  const ic = new Uint8Array(W * H);
+  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) { const i = y * W + x; if (!dis[i] && !dis[i - 1] && !dis[i + 1] && !dis[i - W] && !dis[i + W]) ic[i] = 1; }
+  // dış çizgi: dolu hücrelerin kenarları (dolu sol tarafta), zincirle, en uzununu al
+  const sonraki = new Map(); const anahtar = (x, y) => y * (W + 1) + x;
+  const ekle = (x0, y0, x1, y1) => { const a = anahtar(x0, y0); let l = sonraki.get(a); if (!l) sonraki.set(a, l = []); l.push(anahtar(x1, y1)); };
+  const dolu = (x, y) => x >= 0 && y >= 0 && x < W && y < H && ic[y * W + x];
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (!dolu(x, y)) continue;
+    if (!dolu(x, y - 1)) ekle(x, y, x + 1, y); if (!dolu(x + 1, y)) ekle(x + 1, y, x + 1, y + 1);
+    if (!dolu(x, y + 1)) ekle(x + 1, y + 1, x, y + 1); if (!dolu(x - 1, y)) ekle(x, y + 1, x, y);
+  }
+  let en = null;
+  for (const [bas] of sonraki) {
+    const l0 = sonraki.get(bas); if (!l0 || !l0.length) continue;
+    const dongu = [bas]; let x = l0.pop(); let koruma = 0;
+    while (x !== bas && koruma++ < 4e6) { dongu.push(x); const l = sonraki.get(x); if (!l || !l.length) break; x = l.pop(); }
+    if (!en || dongu.length > en.length) en = dongu;
+  }
+  if (!en || en.length < 4) return null;
+  return en.map(a => { const x = a % (W + 1), y = Math.floor(a / (W + 1)); return [u0 + (x - pad) * h, v0 + (y - pad) * h]; });
 }
 function isinKesis(o, d) {
   const V = D.model.V, F = D.model.F; let en = Infinity, yuz = -1;

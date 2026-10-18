@@ -43,6 +43,20 @@ header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding-block:10p
 .sahne{position:relative;min-width:0;min-height:0;background:var(--stage)}
 canvas#gl{width:100%;height:100%;display:block;touch-action:none;cursor:grab}
 canvas#gl.secim{cursor:crosshair}
+canvas#gl.firca{cursor:none}
+.btn[aria-pressed=true]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.btn svg{width:16px;height:16px;flex:none}
+.firca-bar{position:absolute;left:12px;right:12px;top:12px;display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:8px 10px;background:color-mix(in srgb,var(--panel) 94%,transparent);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 4px 18px rgba(0,0,0,.12);font-size:13px;z-index:3}
+.firca-bar label{display:flex;align-items:center;gap:6px;color:var(--muted)}
+.firca-bar select,.firca-bar input[type=number]{border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:3px 6px}
+.firca-bar input[type=number]{width:64px;font-family:var(--f-mono)}
+.firca-bar input[type=range]{width:120px;accent-color:var(--accent)}
+.firca-bar .seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.firca-bar .seg button{border:0;background:transparent;padding:4px 10px;cursor:pointer}
+.firca-bar .seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-fg);font-weight:600}
+.firca-bar .bosluk{flex:1}
+.firca-bar .ip{font-size:12px;color:var(--muted);flex-basis:100%}
+.sahne.firca-acik .ipucu{top:auto;bottom:48px}
 .ipucu{position:absolute;left:12px;top:12px;right:12px;display:flex;gap:8px;flex-wrap:wrap;pointer-events:none}
 .ipucu span{pointer-events:none;background:color-mix(in srgb,var(--panel) 88%,transparent);border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:12.5px}
 .ipucu span.vurgu{border-color:var(--cut);color:var(--cut);font-weight:600}
@@ -120,12 +134,22 @@ kbd{font-family:var(--f-mono);font-size:11px;border:1px solid var(--line);border
     <div class="logo"><i><b></b><b></b><b></b><b></b></i>Parçala</div>
     <div class="dosyaad" id="dosyaad">örnek model</div>
     <input type="file" id="dosya" accept=".stl,.3mf" hidden>
+    <button class="btn" id="fircaBtn" type="button" aria-pressed="false" title="Fırça: seçimi elle boya / sil (B)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18.4 2.6a2 2 0 0 1 2.9 2.9L12 14.8 9.2 12z"/><path d="M8.5 13.2c-2 0-3.5 1.6-3.5 3.5 0 1.4-1 2.3-2.5 2.6 1.2 1.3 3 1.9 4.8 1.9 2.8 0 4.7-2 4.7-4.5z"/></svg>Fırça</button>
     <button class="btn" id="acBtn" type="button">Model aç (.stl / .3mf)</button>
   </header>
   <div class="govde">
     <div class="sahne" id="sahne">
       <canvas id="gl"></canvas>
       <div class="ipucu" id="ipucu"></div>
+      <div class="firca-bar" id="fircaBar" role="toolbar" aria-label="Fırça" hidden>
+        <div class="seg" role="group" aria-label="Fırça modu"><button type="button" data-fm="ekle" aria-pressed="true">Boya</button><button type="button" data-fm="sil" aria-pressed="false">Sil</button></div>
+        <label for="fSekil">Şekil <select id="fSekil"><option value="daire">Yuvarlak</option><option value="kare">Kare</option><option value="akilli">Akıllı (kenarı geçmez)</option></select></label>
+        <label for="fBoy">Boyut <input type="range" id="fBoyR" min="0.2" max="30" step="0.1"><input type="number" id="fBoy" min="0.1" max="200" step="0.1"> mm</label>
+        <span class="bosluk"></span>
+        <button type="button" class="btn kucuk" id="fGeri" title="Geri al (Ctrl+Z)">Geri al</button>
+        <button type="button" class="btn kucuk ana" id="fKapat">Bitti</button>
+        <div class="ip">Sol tık sürükle: boya · <b>Alt</b> basılı: sil · <b>[ ]</b>: fırça boyutu · Döndürmek için orta tuş ya da <b>Boşluk</b> + sürükle · Sağ tık: kaydır</div>
+      </div>
       <div class="eksenler" id="eksenler">Sürükle: döndür · Sağ tık/iki parmak: kaydır · Tekerlek: yakınlaş</div>
       <div class="gorunumler" role="toolbar" aria-label="Görünüm">
         <button type="button" data-gor="on" title="Önden (1)">Ön</button><button type="button" data-gor="arka" title="Arkadan (Ctrl+1)">Arka</button>
@@ -348,8 +372,10 @@ const Gor = (() => {
     for (const s of ustler) { gl.uniform3fv(u.renk, s.renk); gl.uniform1f(u.alfa, s.alfa); gl.bindVertexArray(s.t.vao); gl.drawArrays(gl.TRIANGLES, 0, s.t.n); }
     gl.disable(gl.POLYGON_OFFSET_FILL);
     for (const c of cizgiler) { gl.uniform3fv(u.renk, c.renk); gl.uniform1f(u.alfa, c.alfa ?? 1); if (c.ustte) gl.disable(gl.DEPTH_TEST); gl.bindVertexArray(c.t.vao); gl.drawArrays(gl.LINES, 0, c.t.n); gl.enable(gl.DEPTH_TEST); }
+    if (imlec) { gl.disable(gl.DEPTH_TEST); gl.uniform3fv(u.renk, imlec.renk); gl.uniform1f(u.alfa, 1); gl.bindVertexArray(imlec.t.vao); gl.drawArrays(gl.LINES, 0, imlec.t.n); gl.enable(gl.DEPTH_TEST); }
     gl.depthMask(true); gl.bindVertexArray(null);
   }
+  let imlec = null;
   let istek = false; const yenile = () => { if (!istek) { istek = true; requestAnimationFrame(() => { istek = false; ciz(); }); } };
   function isin(cx, cy) {
     const r = tuval.getBoundingClientRect(); const x = (cx - r.left) / r.width * 2 - 1, y = 1 - (cy - r.top) / r.height * 2;
@@ -365,6 +391,7 @@ const Gor = (() => {
     govdeAyarla(liste) { for (const g of govdeler) g.t.sil(); govdeler = liste.map(x => ({ ...x, t: tampon(x.V, x.F) })); yenile(); },
     govdeler: () => govdeler,
     renkVer(i, C) { const g = govdeler[i]; if (!g) return; gl.bindBuffer(gl.ARRAY_BUFFER, g.t.cb); gl.bufferData(gl.ARRAY_BUFFER, C, gl.DYNAMIC_DRAW); g.t.renkli = !!C; yenile(); },
+    imlecAyarla(V, renk) { if (imlec) imlec.t.sil(); imlec = V ? { t: tampon(V, null), renk } : null; yenile(); },
     ustAyarla(tris, lines) { for (const s of ustler) s.t.sil(); for (const c of cizgiler) c.t.sil(); ustler = tris.map(x => ({ ...x, t: tampon(x.V, null) })); cizgiler = lines.map(x => ({ ...x, t: tampon(x.V, null) })); yenile(); },
     sigdir(lo, hi) {
       const c = [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2]; const R = Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2;
@@ -470,7 +497,7 @@ function kesimHTML(k, i) {
         if (b.kanatOneri) g += `<div class="tam bilgi"><b>Bu ince bir kanat gibi görünüyor</b> (kalınlık <span class="sayi">${b.kanatOneri.T.toFixed(2)}</span> mm). Tek yüzü değil, kanadın tamamını kökünden dilli ayırmak için:</div><div class="tam"><button type="button" class="btn ana kucuk" id="bk_${k.id}">Kanat olarak ayır</button></div>`;
         g += `<div class="tam satir"><button type="button" class="btn kucuk" id="bb_${k.id}">Dış kenara büyüt</button><button type="button" class="btn kucuk" id="bg_${k.id}" ${b.gecmis && b.gecmis.length ? '' : 'disabled'}>Geri al</button><button type="button" class="btn kucuk" id="bt_${k.id}">Seçimi temizle</button></div>`;
         g += `<div class="tam bilgi">"Dış kenara büyüt" seçimi bir sonraki kenara kadar genişletir (camı çerçevesiyle almak için). <b>Shift</b> basılıyken tıklarsan o bölge seçime eklenir.</div>`;
-      } else g += `<div class="tam bilgi">${b.modu === 'renk' ? 'Ayırmak istediğin renkli bölgeye tıkla (ör. vizör). Aynı renkteki bitişik yüzey seçilir.' : 'Ayırmak istediğin bölgeye tıkla. Seçim, keskin kenara (girintinin dudağına) kadar yayılır.'}</div>`;
+      } else g += `<div class="tam bilgi">${typeof Firca !== 'undefined' && Firca.acik ? 'Fırçayla ayırmak istediğin yeri boya. Üstteki çubuktan boyutu ve şekli ayarlayabilirsin.' : b.modu === 'renk' ? 'Ayırmak istediğin renkli bölgeye tıkla (ör. vizör). Aynı renkteki bitişik yüzey seçilir.' : 'Ayırmak istediğin bölgeye tıkla. Seçim, keskin kenara (girintinin dudağına) kadar yayılır.'}</div>`;
     } else if (k.mod === 'kanat') {
       const n = k.kanat.tik.length; const adimlar = ['Kanadın bir yüzüne tıkla', 'Kanadın öbür yüzüne tıkla', 'Kanadın bir ucuna tıkla (gövdeye bağlandığı uç)', 'Kanadın öbür ucuna tıkla (en uzak uç)'];
       g += `<div class="tam kanat-adim">${adimlar.map((a, j) => `<div class="${j < n ? 'bitti' : j === n ? 'simdi' : ''}"><b>${j + 1}</b>${a}${j === 1 && n >= 2 ? ` · <span class="sayi">kalınlık ${k.kanat.kalinlik.toFixed(2)} mm</span>` : ''}${j === 3 && n >= 4 ? ` · <span class="sayi">boy ${k.boy.toFixed(1)} mm</span>` : ''}</div>`).join('')}</div>`;
@@ -551,6 +578,8 @@ function panelCiz() {
     h += `<div class="altbar"><button type="button" class="btn ana" id="indir" ${D.mesgul ? 'disabled' : ''}>Parçaları indir (.zip)</button><button type="button" class="btn" id="geri">Kesimlere dön</button></div>`;
   }
   panel.innerHTML = h;
+  if (Firca.acik && (D.mod !== 'duzen' || !D.model)) Firca.ac(false);
+  $('#fircaBtn').disabled = !(D.model && D.mod === 'duzen');
   baglaPanel();
   ipucuCiz();
 }
@@ -558,6 +587,7 @@ function ipucuCiz() {
   const k = seciliKesim(); let h = '';
   if (D.mod === 'duzen' && k) {
     if (k.mod === 'kanat') { const n = k.kanat.tik.length; h = `<span class="vurgu">${['1/4 · Kanadın bir yüzüne tıkla', '2/4 · Kanadın öbür yüzüne tıkla', '3/4 · Kanadın gövdeye bağlandığı uca tıkla', '4/4 · Kanadın öbür ucuna tıkla'][n] || 'Kanat seçildi · baştan seçmek için panelden "Baştan seç"'}</span>`; }
+    else if (k.mod === 'bolge' && typeof Firca !== 'undefined' && Firca.acik) h = `<span class="vurgu">Fırça açık · boyadığın yer seçime eklenir</span>`;
     else if (k.mod === 'bolge') h = `<span class="vurgu">${k.bolge.secim ? 'Başka yere tıklarsan seçim yenilenir' : k.bolge.modu === 'renk' ? 'Ayıracağın renkli bölgeye tıkla' : 'Ayıracağın bölgeye tıkla · keskin kenarda durur'}</span>`;
     else if (k.tip === 'tikac') h = `<span class="vurgu">${k.nokta ? 'Yeri değiştirmek için modele tıkla' : 'Renkli bölgenin ortasına tıkla'}</span>`;
     else h = `<span class="vurgu">Kesim yüksekliği için modele tıkla</span>`;
@@ -935,17 +965,23 @@ function sonucCiz() {
   if (!Gor) return;
   let surukle = null, iki = null; const kam = Gor.kam;
   tuval.addEventListener('contextmenu', e => e.preventDefault());
-  tuval.addEventListener('pointerdown', e => { tuval.setPointerCapture(e.pointerId); surukle = { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, b: e.button, kay: e.shiftKey || e.button === 2 }; });
+  tuval.addEventListener('pointerdown', e => {
+    if (Firca.acik && e.button === 0 && !Firca.bosluk && e.pointerType !== 'touch' || Firca.acik && e.pointerType === 'touch' && !iki) { tuval.setPointerCapture(e.pointerId); Firca.basla(e); return; }
+    tuval.setPointerCapture(e.pointerId); surukle = { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, b: e.button, kay: e.shiftKey || e.button === 2 }; });
   tuval.addEventListener('pointermove', e => {
+    if (Firca.acik && !surukle) { Firca.hareket(e); return; }
     if (!surukle || iki) return; const dx = e.clientX - surukle.x, dy = e.clientY - surukle.y; surukle.x = e.clientX; surukle.y = e.clientY;
     if (surukle.kay) { const s = kam.uzak * 0.0018; const sy = Math.sin(kam.yaw), cy = Math.cos(kam.yaw); kam.hedef[0] += (sy * dx) * s; kam.hedef[1] += (-cy * dx) * s; kam.hedef[2] += dy * s; }
     else { kam.yaw -= dx * 0.008; kam.pitch = Math.max(-1.45, Math.min(1.45, kam.pitch + dy * 0.008)); }
     Gor.yenile();
   });
   tuval.addEventListener('pointerup', e => {
+    if (Firca.boyuyor) { Firca.bitir(); return; }
+    if (Firca.acik) { surukle = null; return; }
     if (surukle && !iki && Math.hypot(e.clientX - surukle.x0, e.clientY - surukle.y0) < 5 && surukle.b === 0) tikla(e.clientX, e.clientY, e.shiftKey);
     surukle = null;
   });
+  tuval.addEventListener('pointerleave', () => { if (Firca.acik && !Firca.boyuyor) Gor.imlecAyarla(null); });
   tuval.addEventListener('wheel', e => { e.preventDefault(); kam.uzak *= Math.exp(e.deltaY * 0.0012); Gor.yenile(); }, { passive: false });
   const dok = new Map();
   tuval.addEventListener('touchstart', e => { for (const t of e.changedTouches) dok.set(t.identifier, [t.clientX, t.clientY]); if (dok.size === 2) { const [a, b] = [...dok.values()]; iki = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), m: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] }; } }, { passive: true });
@@ -968,10 +1004,202 @@ function sonucCiz() {
   document.addEventListener('keydown', e => {
     if (/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement && document.activeElement.tagName)) return;
     const c = e.ctrlKey || e.metaKey; const k = e.key;
+    if (k === 'b' || k === 'B') { Firca.ac(!Firca.acik); e.preventDefault(); return; }
+    if (Firca.acik) {
+      if (k === '[') { Firca.boyut(Firca.r / 1.2); e.preventDefault(); return; }
+      if (k === ']') { Firca.boyut(Firca.r * 1.2); e.preventDefault(); return; }
+      if (c && (k === 'z' || k === 'Z')) { Firca.geri(); e.preventDefault(); return; }
+      if (k === 'Escape') { Firca.ac(false); return; }
+    }
     if (k === '1') Gor.bak(c ? 'arka' : 'on'); else if (k === '3') Gor.bak(c ? 'sol' : 'sag'); else if (k === '7') Gor.bak(c ? 'alt' : 'ust');
     else if (k === '0') Gor.bak('izo'); else if (k === '5') ortoAyarla(!Gor.kam.orto); else if (k === 'f' || k === 'F') $('#sigdirBtn').click(); else return;
     e.preventDefault();
   });
+})();
+// ====================================================================== hızlı ışın / bölge sorgusu (ızgara)
+function hizliYapi() {
+  const m = D.model; if (m._hiz) return m._hiz;
+  const V = m.V, F = m.F, nf = F.length / 3; const e = 0.01;
+  const lo = [m.lo[0] - e, m.lo[1] - e, m.lo[2] - e], hi = [m.hi[0] + e, m.hi[1] + e, m.hi[2] + e];
+  const ext = [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]];
+  const s = Math.cbrt(ext[0] * ext[1] * ext[2] / Math.max(1, nf / 3));
+  const n = ext.map(x => Math.max(1, Math.min(200, Math.ceil(x / s)))); const h = ext.map((x, i) => x / n[i]);
+  const hc = (x, i) => Math.max(0, Math.min(n[i] - 1, Math.floor((x - lo[i]) / h[i])));
+  const bas = new Int32Array(n[0] * n[1] * n[2] + 1);
+  const kut = new Int32Array(nf * 6);
+  for (let t = 0; t < nf; t++) {
+    const a = F[3 * t] * 3, b = F[3 * t + 1] * 3, c = F[3 * t + 2] * 3;
+    for (let i = 0; i < 3; i++) { const p = V[a + i], q = V[b + i], r = V[c + i]; kut[6 * t + i] = hc(Math.min(p, q, r), i); kut[6 * t + 3 + i] = hc(Math.max(p, q, r), i); }
+    for (let z = kut[6 * t + 2]; z <= kut[6 * t + 5]; z++) for (let y = kut[6 * t + 1]; y <= kut[6 * t + 4]; y++) for (let x = kut[6 * t]; x <= kut[6 * t + 3]; x++) bas[(z * n[1] + y) * n[0] + x + 1]++;
+  }
+  for (let i = 1; i < bas.length; i++) bas[i] += bas[i - 1];
+  const yer = bas.slice(0, -1); const liste = new Int32Array(bas[bas.length - 1]);
+  for (let t = 0; t < nf; t++) for (let z = kut[6 * t + 2]; z <= kut[6 * t + 5]; z++) for (let y = kut[6 * t + 1]; y <= kut[6 * t + 4]; y++) for (let x = kut[6 * t]; x <= kut[6 * t + 3]; x++) liste[yer[(z * n[1] + y) * n[0] + x]++] = t;
+  m._hiz = { lo, hi, n, h, bas, liste, damga: new Int32Array(nf), sayac: 0 }; return m._hiz;
+}
+function ucgenIsin(V, F, t, o, d) {
+  const a = F[3 * t] * 3, b = F[3 * t + 1] * 3, c = F[3 * t + 2] * 3;
+  const e1x = V[b] - V[a], e1y = V[b + 1] - V[a + 1], e1z = V[b + 2] - V[a + 2], e2x = V[c] - V[a], e2y = V[c + 1] - V[a + 1], e2z = V[c + 2] - V[a + 2];
+  const px = d[1] * e2z - d[2] * e2y, py = d[2] * e2x - d[0] * e2z, pz = d[0] * e2y - d[1] * e2x; const det = e1x * px + e1y * py + e1z * pz;
+  if (Math.abs(det) < 1e-12) return Infinity; const inv = 1 / det;
+  const tx = o[0] - V[a], ty = o[1] - V[a + 1], tz = o[2] - V[a + 2]; const uu = (tx * px + ty * py + tz * pz) * inv; if (uu < 0 || uu > 1) return Infinity;
+  const qx = ty * e1z - tz * e1y, qy = tz * e1x - tx * e1z, qz = tx * e1y - ty * e1x; const vv = (d[0] * qx + d[1] * qy + d[2] * qz) * inv; if (vv < 0 || uu + vv > 1) return Infinity;
+  const s = (e2x * qx + e2y * qy + e2z * qz) * inv; return s > 1e-6 ? s : Infinity;
+}
+// ızgarada ışın yürüyüşü: ilk çarpılan üçgen
+function hizliIsin(o, d) {
+  const H = hizliYapi(), V = D.model.V, F = D.model.F; const { lo, hi, n, h } = H;
+  let t0 = 0, t1 = Infinity;
+  for (let i = 0; i < 3; i++) {
+    if (Math.abs(d[i]) < 1e-12) { if (o[i] < lo[i] || o[i] > hi[i]) return null; continue; }
+    let a = (lo[i] - o[i]) / d[i], b = (hi[i] - o[i]) / d[i]; if (a > b) [a, b] = [b, a]; t0 = Math.max(t0, a); t1 = Math.min(t1, b);
+  }
+  if (t0 > t1) return null;
+  const p = [o[0] + d[0] * t0, o[1] + d[1] * t0, o[2] + d[2] * t0];
+  const c = [0, 1, 2].map(i => Math.max(0, Math.min(n[i] - 1, Math.floor((p[i] - lo[i]) / h[i]))));
+  const adim = [0, 1, 2].map(i => d[i] > 0 ? 1 : d[i] < 0 ? -1 : 0);
+  const tMax = [0, 1, 2].map(i => adim[i] === 0 ? Infinity : (lo[i] + (c[i] + (adim[i] > 0 ? 1 : 0)) * h[i] - o[i]) / d[i]);
+  const tD = [0, 1, 2].map(i => adim[i] === 0 ? Infinity : h[i] / Math.abs(d[i]));
+  let en = Infinity, yuz = -1;
+  for (let g = 0; g < 2000; g++) {
+    const ci = (c[2] * n[1] + c[1]) * n[0] + c[0];
+    for (let q = H.bas[ci]; q < H.bas[ci + 1]; q++) { const t = H.liste[q]; const s = ucgenIsin(V, F, t, o, d); if (s < en) { en = s; yuz = t; } }
+    const ax = tMax[0] < tMax[1] ? (tMax[0] < tMax[2] ? 0 : 2) : (tMax[1] < tMax[2] ? 1 : 2);
+    if (en <= tMax[ax] + 1e-6) break;
+    c[ax] += adim[ax]; if (c[ax] < 0 || c[ax] >= n[ax]) break; tMax[ax] += tD[ax];
+  }
+  if (yuz < 0) return null;
+  return { p: [o[0] + d[0] * en, o[1] + d[1] * en, o[2] + d[2] * en], yuz: 3 * yuz, t: yuz };
+}
+// p merkezli r yarıçaplı kürenin dokunduğu üçgenler
+function kureUcgenleri(p, r, f) {
+  const H = hizliYapi(), V = D.model.V, F = D.model.F; const { lo, n, h } = H; const dm = ++H.sayac; const r2 = r * r;
+  const a = [0, 1, 2].map(i => Math.max(0, Math.floor((p[i] - r - lo[i]) / h[i]))), b = [0, 1, 2].map(i => Math.min(n[i] - 1, Math.floor((p[i] + r - lo[i]) / h[i])));
+  for (let z = a[2]; z <= b[2]; z++) for (let y = a[1]; y <= b[1]; y++) for (let x = a[0]; x <= b[0]; x++) {
+    const ci = (z * n[1] + y) * n[0] + x;
+    for (let q = H.bas[ci]; q < H.bas[ci + 1]; q++) {
+      const t = H.liste[q]; if (H.damga[t] === dm) continue; H.damga[t] = dm;
+      let ic = false;
+      for (let j = 0; j < 3 && !ic; j++) { const v = F[3 * t + j] * 3; const dx = V[v] - p[0], dy = V[v + 1] - p[1], dz = V[v + 2] - p[2]; if (dx * dx + dy * dy + dz * dz <= r2) ic = true; }
+      if (!ic) { let cx = 0, cy = 0, cz = 0; for (let j = 0; j < 3; j++) { const v = F[3 * t + j] * 3; cx += V[v]; cy += V[v + 1]; cz += V[v + 2]; } cx = cx / 3 - p[0]; cy = cy / 3 - p[1]; cz = cz / 3 - p[2]; if (cx * cx + cy * cy + cz * cz <= r2) ic = true; }
+      if (ic) f(t);
+    }
+  }
+}
+
+// ====================================================================== fırça
+const Firca = {
+  acik: false, mod: 'ekle', sekil: 'daire', r: 2, boyuyor: false, bosluk: false, son: null, _rafH: 0, _rafB: 0, _bekleyen: null,
+  kesim() {
+    let k = seciliKesim();
+    if (!k || k.mod !== 'bolge') {
+      k = yeniKesim('tikac'); Object.assign(k, { mod: 'bolge', ad: 'Bölge ' + (D.kesimler.filter(x => x.mod === 'bolge').length + 1), bolge: { modu: D.model && D.model.renk ? 'renk' : 'kenar', aci: 30, ek: 1.5, tohum: null, secim: null }, sekil: 'cokgen', duvar: 30, icPay: 0.05, anahtar: false });
+      D.kesimler.push(k); D.secili = k.id; panelCiz(); onizleme();
+    }
+    const b = k.bolge; if (!b._ic) b._ic = new Uint8Array(D.model.F.length / 3);
+    return k;
+  },
+  ac(v) {
+    if (v && (!D.model || D.mod !== 'duzen')) return;
+    this.acik = v; $('#fircaBar').hidden = !v; setTimeout(ipucuCiz, 0); $('#fircaBtn').setAttribute('aria-pressed', String(v));
+    $('#sahne').classList.toggle('firca-acik', v); tuval.classList.toggle('firca', v);
+    if (v) {
+      const m = D.model; const boy = Math.max(m.hi[0] - m.lo[0], m.hi[1] - m.lo[1], m.hi[2] - m.lo[2]);
+      const R = $('#fBoyR'); R.max = String(yuvarla(Math.max(5, boy * 0.25), 1));
+      if (!this._ilk) { this._ilk = true; this.r = yuvarla(Math.max(0.5, boy * 0.02), 1); }
+      this.boyut(this.r); this.kesim();
+      ilerleme.ac('Fırça hazırlanıyor'); setTimeout(() => { hizliYapi(); komsuluk(); ilerleme.kapa(); }, 30);
+    } else { Gor.imlecAyarla(null); this.boyuyor = false; }
+  },
+  boyut(r) { this.r = Math.max(0.1, Math.min(200, yuvarla(r, 2))); $('#fBoy').value = this.r; $('#fBoyR').value = this.r; if (this.son) this.imlec(this.son.p, this.son.n); },
+  vur(e) {
+    const { o, d } = Gor.isin(e.clientX, e.clientY); const h = hizliIsin(o, d); if (!h) return null;
+    const N = komsuluk().N; return { p: h.p, t: h.t, n: [N[3 * h.t], N[3 * h.t + 1], N[3 * h.t + 2]], d };
+  },
+  imlec(p, n) {
+    const E = yardimci.eksen(p, n); const r = this.r; const L = [];
+    const W = (x, y) => [p[0] + E.u[0] * x + E.v[0] * y + n[0] * 0.02, p[1] + E.u[1] * x + E.v[1] * y + n[1] * 0.02, p[2] + E.u[2] * x + E.v[2] * y + n[2] * 0.02];
+    if (this.sekil === 'kare') { const c = [W(-r, -r), W(r, -r), W(r, r), W(-r, r)]; for (let i = 0; i < 4; i++) L.push(...c[i], ...c[(i + 1) % 4]); }
+    else for (let i = 0; i < 48; i++) L.push(...W(r * Math.cos(2 * Math.PI * i / 48), r * Math.sin(2 * Math.PI * i / 48)), ...W(r * Math.cos(2 * Math.PI * (i + 1) / 48), r * Math.sin(2 * Math.PI * (i + 1) / 48)));
+    L.push(...W(-r * 0.15, 0), ...W(r * 0.15, 0), ...W(0, -r * 0.15), ...W(0, r * 0.15));
+    const sil = this.mod === 'sil' || this._alt;
+    Gor.imlecAyarla(new Float32Array(L), Gor.rgb(sil ? '#ff4d4d' : getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#16806f'));
+  },
+  hareket(e) {
+    this._alt = e.altKey; this._bekleyen = e;
+    if (this._rafH) return;
+    this._rafH = requestAnimationFrame(() => {
+      this._rafH = 0; const ev = this._bekleyen; if (!ev) return;
+      const h = this.vur(ev); if (h) { this.imlec(h.p, h.n); if (this.boyuyor) this.boyaArasi(this.sonEkran, [ev.clientX, ev.clientY], h); this.son = h; } else Gor.imlecAyarla(null);
+      this.sonEkran = [ev.clientX, ev.clientY];
+    });
+  },
+  basla(e) {
+    if (!D.model || D.mod !== 'duzen') return;
+    const k = this.kesim(); const b = k.bolge; this._alt = e.altKey;
+    b.gecmis = b.gecmis || []; b.gecmis.push(b._ic.slice()); b.tasti = false; this._ekli = []; this._silindi = false;
+    this.boyuyor = true; this.sonEkran = [e.clientX, e.clientY];
+    const h = this.vur(e); if (h) { this.boya(h); this.son = h; this.imlec(h.p, h.n); }
+  },
+  boyaArasi(a, bb, h) {
+    // hızlı sürüklemede aradaki boşlukları doldur
+    if (a) { const px = Math.hypot(bb[0] - a[0], bb[1] - a[1]); const adim = Math.max(1, Math.min(24, Math.ceil(px / 6))); for (let i = 1; i < adim; i++) { const q = this.vur({ clientX: a[0] + (bb[0] - a[0]) * i / adim, clientY: a[1] + (bb[1] - a[1]) * i / adim }); if (q) this.boya(q, true); } }
+    this.boya(h);
+  },
+  boya(h, sessiz) {
+    const k = seciliKesim(); if (!k || !k.bolge) return; const b = k.bolge, ic = b._ic; const deger = (this.mod === 'sil') !== !!this._alt ? 0 : 1;
+    const N = komsuluk().N, d = h.d, r = this.r;
+    if (this.sekil === 'akilli') {
+      const K = komsuluk(), F = D.model.F, V = D.model.V; const cosA = Math.cos(b.aci * Math.PI / 180); const r2 = r * r; const gor = new Set([h.t]); const yig = [h.t];
+      while (yig.length) {
+        const t = yig.pop(); this.yaz(ic, t, deger);
+        for (let c = 0; c < 3; c++) {
+          const s = kenarKomsu(K, F, t, F[3 * t + c], F[3 * t + (c + 1) % 3]); if (s < 0 || gor.has(s)) continue; gor.add(s);
+          if (N[3 * t] * N[3 * s] + N[3 * t + 1] * N[3 * s + 1] + N[3 * t + 2] * N[3 * s + 2] < cosA) continue;
+          let yakin = false; for (let j = 0; j < 3; j++) { const v = F[3 * s + j] * 3; const dx = V[v] - h.p[0], dy = V[v + 1] - h.p[1], dz = V[v + 2] - h.p[2]; if (dx * dx + dy * dy + dz * dz <= r2) { yakin = true; break; } }
+          if (yakin) yig.push(s);
+        }
+      }
+    } else {
+      const E = this.sekil === 'kare' ? yardimci.eksen(h.p, h.n) : null; const F = D.model.F, V = D.model.V;
+      kureUcgenleri(h.p, this.sekil === 'kare' ? r * Math.SQRT2 : r, t => {
+        if (N[3 * t] * d[0] + N[3 * t + 1] * d[1] + N[3 * t + 2] * d[2] > 0.2) return;   // arka yüzleri boyama
+        if (E) { let cx = 0, cy = 0, cz = 0; for (let j = 0; j < 3; j++) { const v = F[3 * t + j] * 3; cx += V[v] / 3; cy += V[v + 1] / 3; cz += V[v + 2] / 3; } const q = [cx - h.p[0], cy - h.p[1], cz - h.p[2]]; if (Math.abs(v3.d(q, E.u)) > r || Math.abs(v3.d(q, E.v)) > r) return; }
+        this.yaz(ic, t, deger);
+      });
+    }
+    if (!sessiz) this.cizSecim(k);
+  },
+  _ekli: [], _silindi: false,
+  yaz(ic, t, deger) { if (ic[t] === deger) return; ic[t] = deger; if (deger) this._ekli.push(t); else this._silindi = true; },
+  cizSecim(k) {
+    if (this._rafB) return;
+    this._rafB = requestAnimationFrame(() => {
+      this._rafB = 0; const b = k.bolge, ic = b._ic; let S;
+      if (!this._silindi && b.secim) { S = new Int32Array(b.secim.length + this._ekli.length); S.set(b.secim); S.set(this._ekli, b.secim.length); }
+      else if (!this._silindi) S = Int32Array.from(this._ekli);
+      else { let n = 0; for (let t = 0; t < ic.length; t++) n += ic[t]; S = new Int32Array(n); let j = 0; for (let t = 0; t < ic.length; t++) if (ic[t]) S[j++] = t; }
+      this._ekli = []; this._silindi = false;
+      b.secim = S.length ? S : null; b.sayi = S.length; onizleme();
+    });
+  },
+  bitir() {
+    this.boyuyor = false; const k = seciliKesim(); if (!k || !k.bolge) return;
+    if (this._rafB) { cancelAnimationFrame(this._rafB); this._rafB = 0; } this._ekli = []; this._silindi = false;
+    bolgeBitir(k); panelCiz(); onizleme();
+  },
+  geri() { const k = seciliKesim(); if (k && k.bolge) { bolgeGeri(k); panelCiz(); onizleme(); } },
+};
+(() => {
+  $('#fircaBtn').onclick = () => Firca.ac(!Firca.acik);
+  $('#fKapat').onclick = () => Firca.ac(false);
+  $('#fGeri').onclick = () => Firca.geri();
+  document.querySelectorAll('[data-fm]').forEach(b => b.onclick = () => { Firca.mod = b.dataset.fm; document.querySelectorAll('[data-fm]').forEach(x => x.setAttribute('aria-pressed', String(x === b))); });
+  $('#fSekil').onchange = e => { Firca.sekil = e.target.value; };
+  $('#fBoy').oninput = e => { const v = parseFloat(e.target.value); if (v > 0) Firca.boyut(v); };
+  $('#fBoyR').oninput = e => Firca.boyut(parseFloat(e.target.value));
+  document.addEventListener('keydown', e => { if (e.key === ' ' && Firca.acik && !/^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(document.activeElement && document.activeElement.tagName)) { Firca.bosluk = true; e.preventDefault(); } });
+  document.addEventListener('keyup', e => { if (e.key === ' ') Firca.bosluk = false; });
 })();
 // ====================================================================== akıllı seçim (renk / kenar)
 // Komşuluk: köşe -> üçgenler (CSR). Büyük modelde bir kez hesaplanır.
@@ -1073,7 +1301,8 @@ function cokgenYumusat(P0, adimIstek, tur) {
   return A.map(p => [+p[0].toFixed(3), +p[1].toFixed(3)]);
 }
 function bolgeTikac(k) {
-  const m = D.model, V = m.V, F = m.F, K = komsuluk(), b = k.bolge, S = b.secim, ic = b._ic; if (!S || !S.length) return;
+  const m = D.model, V = m.V, F = m.F, K = komsuluk(), b = k.bolge, S = b.secim, ic = b._ic;
+  if (!S || !S.length) { b.secim = null; b.sinir = null; b.kanatOneri = null; k.nokta = null; k.yon = null; k.noktalar = null; return; }
   // ağırlıklı normal ve merkez
   let n = [0, 0, 0], c = [0, 0, 0], At = 0;
   for (const t of S) {
@@ -1222,7 +1451,7 @@ function ortalamaNormal(p, yuz, r) {
 }
 function tikla(x, y, shift) {
   if (D.mod !== 'duzen' || !D.model) return; const k = seciliKesim(); if (!k) return;
-  const { o, d } = Gor.isin(x, y); const h = isinKesis(o, d); if (!h) return;
+  const { o, d } = Gor.isin(x, y); const h = hizliIsin(o, d); if (!h) return;
   if (k.tip === 'duz') { k.konum = yuvarla(h.p['xyz'.indexOf(k.eksen)], 2); k.tikNokta = h.p; }
   else if (k.mod === 'bolge') { bolgeSec(k, h.yuz / 3, shift && !!k.bolge.secim); }
   else if (k.mod === 'kanat') {

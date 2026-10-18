@@ -191,6 +191,7 @@ function isciAna(M, gonder) {
         const ayar = msg.ayar; const parcalar = new Map([['model', model]]); const pimler = []; const n = msg.kesimler.length;
         for (let i = 0; i < n; i++) {
           const k = msg.kesimler[i];
+          try {
           gonder({ tip: 'ilerle', yazi: `${i + 1}/${n} · ${k.ad} kesiliyor`, oran: i / n });
           const src = parcalar.get(k.hedef);
           if (!src) throw new Error(`"${k.ad}": seçilen hedef parça yok`);
@@ -224,6 +225,10 @@ function isciAna(M, gonder) {
             if (!r.parca) throw new Error(`"${k.ad}": tıkaç "${k.hedefAd || 'seçilen'}" parçasına değmiyor. Tıkladığın yer başka bir parçada kalıyor olabilir: "Kesilecek parça"yı kontrol et ya da yeri yeniden seç.`);
             if (!r.kalan) throw new Error(`"${k.ad}": tıkaç hedef parçanın tamamını kaplıyor. Tabanı küçült ya da derinliği azalt.`);
             parcalar.set(k.id, r.parca); parcalar.set(k.hedef, r.kalan);
+          }
+          } catch (e) {
+            if (String(e.message).startsWith('"')) throw e;
+            throw new Error(`${i + 1}. kesim "${k.ad}" yapılamadı (${e.message.replace(/^Kesim yapılamadı: /, '')}). ${i > 0 ? 'Önceki bir kesimle çakışıyor olabilir: bu kesimi silip dene ya da seçimini küçült.' : 'Seçimi biraz değiştirip tekrar dene.'}`);
           }
         }
         gonder({ tip: 'ilerle', yazi: 'Parçalar kontrol ediliyor', oran: 0.98 });
@@ -420,6 +425,7 @@ const panel = $('#panel');
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const yuvarla = (x, n = 2) => +(+x).toFixed(n);
 
+function yeniAd(kok) { let i = 1; while (D.kesimler.some(k => k.ad === kok + ' ' + i)) i++; return kok + ' ' + i; }
 function yeniKesim(tip) {
   const id = 'k' + (++D.sayac); const b = D.model ? D.model.hi : [100, 100, 100];
   const renk = ['kirmizi', 'mavi', 'turuncu', 'yesil', 'sari', 'mor', 'siyah'][(D.kesimler.length) % 7];
@@ -587,6 +593,7 @@ function ipucuCiz() {
   const k = seciliKesim(); let h = '';
   if (D.mod === 'duzen' && k) {
     if (k.mod === 'kanat') { const n = k.kanat.tik.length; h = `<span class="vurgu">${['1/4 · Kanadın bir yüzüne tıkla', '2/4 · Kanadın öbür yüzüne tıkla', '3/4 · Kanadın gövdeye bağlandığı uca tıkla', '4/4 · Kanadın öbür ucuna tıkla'][n] || 'Kanat seçildi · baştan seçmek için panelden "Baştan seç"'}</span>`; }
+    else if (k.mod !== 'bolge' && typeof Firca !== 'undefined' && Firca.acik) h = `<span class="vurgu">Fırça sadece akıllı seçimi düzenler · bu kart ${k.mod === 'kanat' ? 'kanat' : 'başka bir kesim'}</span>`;
     else if (k.mod === 'bolge' && typeof Firca !== 'undefined' && Firca.acik) h = `<span class="vurgu">Fırça açık · boyadığın yer seçime eklenir</span>`;
     else if (k.mod === 'bolge') h = `<span class="vurgu">${k.bolge.secim ? 'Tıkla: bölge ekle · Alt+tık: çıkar · Fırça ile düzelt' : k.bolge.modu === 'renk' ? 'Ayıracağın renkli bölgeye tıkla' : 'Ayıracağın bölgeye tıkla · keskin kenarda durur'}</span>`;
     else if (k.tip === 'tikac') h = `<span class="vurgu">${k.nokta ? 'Yeri değiştirmek için modele tıkla' : 'Renkli bölgenin ortasına tıkla'}</span>`;
@@ -612,8 +619,8 @@ function baglaPanel() {
   const e = id => document.getElementById(id);
   if (e('ekleDuz')) e('ekleDuz').onclick = () => { const k = yeniKesim('duz'); D.kesimler.push(k); D.secili = k.id; panelCiz(); onizleme(); };
   if (e('ekleTikac')) e('ekleTikac').onclick = () => { const k = yeniKesim('tikac'); D.kesimler.push(k); D.secili = k.id; panelCiz(); onizleme(); };
-  if (e('ekleKanat')) e('ekleKanat').onclick = () => { const k = yeniKesim('tikac'); Object.assign(k, { mod: 'kanat', ad: 'Kanat ' + (D.kesimler.filter(x => x.mod === 'kanat').length + 1), kanat: { tik: [] }, sekil: 'dikdortgen', derinlik: 2.5, duvar: 12, icPay: 0.2, anahtar: false }); D.kesimler.push(k); D.secili = k.id; panelCiz(); onizleme(); };
-  if (e('ekleBolge')) e('ekleBolge').onclick = () => { const k = yeniKesim('tikac'); Object.assign(k, { mod: 'bolge', ad: 'Bölge ' + (D.kesimler.filter(x => x.mod === 'bolge').length + 1), bolge: { modu: D.model && D.model.renk ? 'renk' : 'kenar', aci: 30, ek: 1.5, tohum: null, secim: null }, sekil: 'cokgen', duvar: 30, icPay: 0.05, anahtar: false }); D.kesimler.push(k); D.secili = k.id; panelCiz(); onizleme(); };
+  if (e('ekleKanat')) e('ekleKanat').onclick = () => { const k = yeniKesim('tikac'); Object.assign(k, { mod: 'kanat', ad: yeniAd('Kanat'), kanat: { tik: [] }, sekil: 'dikdortgen', derinlik: 2.5, duvar: 12, icPay: 0.2, anahtar: false }); D.kesimler.push(k); D.secili = k.id; panelCiz(); onizleme(); };
+  if (e('ekleBolge')) e('ekleBolge').onclick = () => { const k = yeniKesim('tikac'); Object.assign(k, { mod: 'bolge', ad: yeniAd('Bölge'), bolge: { modu: D.model && D.model.renk ? 'renk' : 'kenar', aci: 30, ek: 1.5, tohum: null, secim: null }, sekil: 'cokgen', duvar: 30, icPay: 0.05, anahtar: false }); D.kesimler.push(k); D.secili = k.id; panelCiz(); onizleme(); };
   if (e('calistir')) e('calistir').onclick = calistir;
   if (e('indir')) e('indir').onclick = indir;
   if (e('geri')) e('geri').onclick = () => { D.mod = 'duzen'; D.hata = null; panelCiz(); modelCiz(); onizleme(); };
@@ -1092,13 +1099,14 @@ const Firca = {
   acik: false, mod: 'ekle', sekil: 'daire', r: 2, boyuyor: false, bosluk: false, son: null, _rafH: 0, _rafB: 0, _bekleyen: null,
   kesim() {
     let k = seciliKesim();
-    if (!k || k.mod !== 'bolge') {
-      // açık seçim yoksa en son akıllı seçimi kullan: otomatik seçim ve fırça aynı seçimi düzenler
+    if (k && k.mod !== 'bolge') return null;          // açık kart akıllı seçim değil (kanat, düz kesim...): ona dokunma
+    if (!k) {
+      // kart açık değilse en son akıllı seçimi kullan: otomatik seçim ve fırça aynı seçimi düzenler
       const son = [...D.kesimler].reverse().find(x => x.mod === 'bolge');
       if (son) { k = son; D.secili = k.id; panelCiz(); onizleme(); }
     }
-    if (!k || k.mod !== 'bolge') {
-      k = yeniKesim('tikac'); Object.assign(k, { mod: 'bolge', ad: 'Bölge ' + (D.kesimler.filter(x => x.mod === 'bolge').length + 1), bolge: { modu: D.model && D.model.renk ? 'renk' : 'kenar', aci: 30, ek: 1.5, tohum: null, secim: null }, sekil: 'cokgen', duvar: 30, icPay: 0.05, anahtar: false });
+    if (!k) {
+      k = yeniKesim('tikac'); Object.assign(k, { mod: 'bolge', ad: yeniAd('Bölge'), bolge: { modu: D.model && D.model.renk ? 'renk' : 'kenar', aci: 30, ek: 1.5, tohum: null, secim: null }, sekil: 'cokgen', duvar: 30, icPay: 0.05, anahtar: false });
       D.kesimler.push(k); D.secili = k.id; panelCiz(); onizleme();
     }
     const b = k.bolge; if (!b._ic) b._ic = new Uint8Array(D.model.F.length / 3);
@@ -1141,7 +1149,9 @@ const Firca = {
   },
   basla(e) {
     if (!D.model || D.mod !== 'duzen') return;
-    const k = this.kesim(); const b = k.bolge; this._alt = e.altKey;
+    const k = this.kesim();
+    if (!k) { $('#ipucu').innerHTML = '<span class="vurgu">Fırça sadece akıllı seçimi düzenler. Açık kart "' + esc(seciliKesim().ad) + '": kartı kapat ya da "+ Akıllı seçim" ekle.</span>'; return; }
+    const b = k.bolge; this._alt = e.altKey;
     if (this.sekil === 'oto') { const h = this.vur(e); if (h) { bolgeSec(k, h.t, (this.mod === 'sil') !== !!e.altKey); panelCiz(); onizleme(); } return; }
     b.sonOto = null;
     b.gecmis = b.gecmis || []; b.gecmis.push(b._ic.slice()); b.tasti = false; this._ekli = []; this._silindi = false;
@@ -1311,6 +1321,8 @@ function bolgeBuyut(k) {
 }
 function kanataCevir(k) {
   const o = k.bolge.kanatOneri; if (!o) return;
+  if (Firca.acik) Firca.ac(false);
+  if (/^Bölge \d+$/.test(k.ad)) k.ad = yeniAd('Kanat');
   const nb = v3.k(o.n, -1);
   Object.assign(k, { mod: 'kanat', kanat: { tik: [{ p: o.p0, n: o.n }, { p: v3.top(o.p0, v3.k(nb, o.T)), n: nb }, { p: o.pa, n: null }, { p: o.pb, n: null }], kalinlik: o.T },
     sekil: 'dikdortgen', noktalar: null, derinlik: 2.5, duvar: 12, icPay: 0.2, anahtar: false, yukari: undefined });

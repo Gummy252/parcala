@@ -543,7 +543,7 @@ function parcalaMotoru() {
     CU.push(cu1); CV.push(cv1);
 
     // ---- üçgenle + kenar kurtarma
-    let T, nB;
+    let T, nB, oncekiEksik = 0;
     for (let tur = 0; ; tur++) {
       nB = BU.length;
       const X = Float64Array.from([...BX, ...GX, ...CU]), Y = Float64Array.from([...BY, ...GY, ...CV]);
@@ -563,6 +563,9 @@ function parcalaMotoru() {
       if (typeof process !== 'undefined' && process.env.PDEBUG) console.log('   tur', tur, 'nB', nB, 'eksik', eksik.length);
       if (!eksik.length) break;
       if (tur >= 14) throw new KesimHatasi('kapak oluşturulamadı');
+      // eksikler hızla artıyorsa (yüzey kendi üstüne katlanıyor) boşuna uğraşma
+      if (tur >= 4 && eksik.length > 3 * (oncekiEksik || 1) && eksik.length > 40) throw new KesimHatasi('kapak oluşturulamadı');
+      oncekiEksik = Math.min(oncekiEksik || Infinity, eksik.length);
       // eksik kenarları ortadan böl
       const yuzBul = new Map();   // yönlü kenar -> yüz indeksi (sadece gerekenler)
       const isteniyor = new Set(eksik.map(([a, b]) => a * 1e7 + b));
@@ -626,7 +629,9 @@ function parcalaMotoru() {
     else if (t.sekil === 'elips') { const a = t.en / 2, b = t.boy / 2; poly = []; for (let i = 0; i < 180; i++) { const q = 2 * Math.PI * i / 180; poly.push([a * Math.cos(q), b * Math.sin(q)]); } }
     else { const a = t.en / 2, b = t.boy / 2; poly = [[-a, -b], [a, -b], [a, b], [-a, b]]; }
     const R = Math.max(...poly.map(p => Math.hypot(p[0], p[1])));
+    let mx = 0, my = 0; for (const p of poly) { mx += p[0] / poly.length; my += p[1] / poly.length; }
     return {
+      merkez: t.sekil === 'cokgen' ? [du + mx * ca - my * sa, dv + mx * sa + my * ca] : null,
       kapsam: R + Math.hypot(du, dv),
       sd: (u, v) => {
         const [x, y] = yerel(u, v); const kaba = Math.hypot(x, y) - R; if (kaba > 4) return kaba;
@@ -701,8 +706,18 @@ function parcalaMotoru() {
       const e = 1e-4; let gx = tb.sd(u + e, v) - tb.sd(u - e, v), gy = tb.sd(u, v + e) - tb.sd(u, v - e); const l = Math.hypot(gx, gy) || 1;
       const d = K * s; return [u + d * gx / l, v + d * gy / l];
     };
-    const parca = guvenliKes(V, F, E, gA, true, h, oA, an ? 0.06 : 0, acici(m));
-    const kalan = guvenliKes(V, F, E, gB, false, h, oB, an ? 0.06 : 0, acici(m - yan));
+    // serbest çokgende merkezden dışarı (ışınsal) açma katlanmaz; olmazsa eğim yönünde açmayı dene
+    const radyal = kay => (u, v) => {
+      const s = tb.sd(u, v) + kay; if (s <= 0) return [u, v];
+      const dx = u - tb.merkez[0], dy = v - tb.merkez[1]; const l = Math.hypot(dx, dy) || 1; const d = K * s; return [u + d * dx / l, v + d * dy / l];
+    };
+    const iki = (g, ust, o, kay) => {
+      if (!tb.merkez) return guvenliKes(V, F, E, g, ust, h, o, an ? 0.06 : 0, acici(kay));
+      try { return guvenliKes(V, F, E, g, ust, h, o, an ? 0.06 : 0, radyal(kay)); }
+      catch (e) { return guvenliKes(V, F, E, g, ust, h, o, an ? 0.06 : 0, acici(kay)); }
+    };
+    const parca = iki(gA, true, oA, m);
+    const kalan = iki(gB, false, oB, m - yan);
     return { parca, kalan };
   }
 

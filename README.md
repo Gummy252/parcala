@@ -20,7 +20,16 @@ The outer shape and dimensions of the model stay exactly the same.
    - **Plug** for parts embedded in the body (windows, logos, badges, fins). Click the center of the colored area and
      adjust shape, size and depth with the sliders. The part gets a plug that sits in a matching socket, with an
      optional key so it can only go in one way.
+   - **Smart selection** picks a region for you and turns its real outline into a plug:
+     by paint color (Bambu painted 3MF), by sharp edges / depth (recessed parts like a visor),
+     or as a whole thin protrusion (fins, ears) that is cut from its root with a tongue.
+   - **Brush toolbar** (top bar, key `B`) edits the same selection: paint/erase brush, click-to-add regions,
+     a magnetic boundary line that follows sharp edges (click points, close, click inside), and the protrusion tool.
+     Auto, brush and erased areas are shown in different colors.
    The model is painted live with each part's color, so you can see what goes where before cutting.
+   Cuts that overlap each other are flagged in red before you split.
+   **Section view** (key `K`) clips the model with a plane so you can check plugs, tongues and sockets inside,
+   both before and after splitting.
 3. **Split** → the parts are shown in their colors; use the slider to explode the view.
 4. **Download** → one zip with an STL per part (filament color in the file name), separate pins,
    and an assembled check file (`birlesik_kontrol.3mf`).

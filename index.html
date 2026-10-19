@@ -159,6 +159,7 @@ kbd{font-family:var(--f-mono);font-size:11px;border:1px solid var(--line);border
         <label for="fMik" class="f-cizgi" hidden><input type="checkbox" id="fMik" checked> Mıknatıs (kenarı takip et)</label>
         <button type="button" class="btn kucuk f-cizgi" id="fCizKapat" hidden>Çizgiyi kapat</button>
         <button type="button" class="btn kucuk f-cizgi" id="fCizSil" hidden>Çizgiyi sil</button>
+        <button type="button" class="btn kucuk f-cizgi" id="fCizSinirSil" hidden title="Bu kesimin tüm kalıcı sınır çizgilerini (duvarlarını) kaldırır">Tüm sınırları sil</button>
         <label for="fBoy" class="f-firca">Boyut <input type="range" id="fBoyR" min="0.2" max="30" step="0.1"><input type="number" id="fBoy" min="0.1" max="200" step="0.1"> mm</label>
         <span class="bosluk"></span>
         <button type="button" class="btn kucuk" id="fGeri" title="Geri al (Ctrl+Z)">Geri al</button>
@@ -1356,9 +1357,21 @@ function kesimHTML(k, i) {
       g += secim('bm_' + k.id, 'Nasıl seçilsin', b.modu, [['renk', 'Renge göre (boyalı modelde)'], ['kenar', 'Kenara / derinliğe göre'], ['ikiRenk', 'Elle boya: 2 zıt renk + boşlukları doldur']], true);
       if (b.modu === 'renk' && !(D.model && D.model.renk)) g += `<div class="tam bilgi">Bu modelde boya bilgisi yok. "Kenara / derinliğe göre" seç.</div>`;
       if (b.modu === 'kenar') g += sayiAlan('ba_' + k.id, 'Hassasiyet: bu açıdan keskin kenarda dur (°)', b.aci, 3, 80, 1, 'tam');
-      if (b.modu === 'ikiRenk') g += `<div class="tam bilgi">Fırça/Bölge/Çizgi aracıyla bir tarafı <b>Ekle</b> (A rengi), karşıt tarafı <b>Çıkar</b>/Alt+tık (B rengi) ile boya. Hiç boyamadığın ara bölgeler, fırçayı bıraktığın anda yüzey üzerinden en yakın tarafa otomatik katılır; parça yine mevcut pim/yuva ile ayrılır.</div>`;
-      if (b.secim) {
-        g += `<div class="tam katman"><span><i style="background:${renkHex(k.renk)}"></i>Otomatik <b class="sayi">${(b.sayiOto ?? b.sayi).toLocaleString('tr-TR')}</b></span><span><i style="background:#2fbf71"></i>Fırça/çizgi <b class="sayi">+${(b.sayiEl || 0).toLocaleString('tr-TR')}</b></span><span><i style="background:#e5484d"></i>Silinen <b class="sayi">−${(b.sayiSil || 0).toLocaleString('tr-TR')}</b></span></div>`;
+      if (b.modu === 'ikiRenk') {
+        g += `<div class="tam bilgi">Fırça/Bölge/Çizgi ile bir tarafı <b>Ekle</b> (A), karşıt tarafı <b>Çıkar</b>/Alt+tık (B) ile boya. Boyarken hiçbir hesap yapılmaz (akıcı kalır); bitince aşağıdaki düğmeye bas: o an boyanmamış yerler en yakın tarafa otomatik dolar ve parça mevcut pim/yuva ile ayrılır. Çizgi aracıyla çizip kapattığın sınırlar, fırçanın geçemeyeceği kalıcı duvar olur (araç değiştirince kaybolmaz; <b>Enter</b>'a tekrar basarak başka bir sınır daha çizebilirsin).</div>`;
+        g += `<div class="tam katman"><span><i style="background:#17c3ff"></i>A (Ekle) <b class="sayi">${((b.sayiEl || 0) + (b.sayiOto || 0)).toLocaleString('tr-TR')}</b></span><span><i style="background:#e5484d"></i>B (Çıkar) <b class="sayi">${(b.sayiSil || 0).toLocaleString('tr-TR')}</b></span></div>`;
+        g += `<div class="tam"><button type="button" class="btn ana kucuk" id="ir_${k.id}">${k.noktalar ? 'Yeniden ayır' : 'Boyamayı bitir, iki rengi ayır'}</button></div>`;
+        if (k.noktalar) {
+          g += `<div class="tam bilgi">Son ayrımda: <span class="sayi">${(b.sayi || 0).toLocaleString('tr-TR')}</span> üçgen · <span class="sayi">${k.en.toFixed(1)} × ${k.boy.toFixed(1)}</span> mm${b.uyari ? `<br><b>${esc(b.uyari)}</b>` : ''}</div>`;
+          g += sayiAlan('be_' + k.id, 'Tıkaç dili: bölgenin altına ek derinlik (mm)', b.ek, 0.5, 15, 0.05, 'tam');
+          g += `<details class="tam"><summary>İnce ayar</summary><div class="izgara" style="grid-template-columns:1fr 1fr">
+            ${sayiAlan('dw_' + k.id, 'Duvar dikliği', k.duvar, 2, 40, 1)}
+            ${sayiAlan('ip_' + k.id, 'Kenar payı (mm)', k.icPay, 0, 1, 0.01)}
+          </div></details>`;
+        }
+        g += `<div class="tam satir"><button type="button" class="btn kucuk" id="bg_${k.id}" ${b.gecmis && b.gecmis.length ? '' : 'disabled'}>Geri al</button><button type="button" class="btn kucuk" id="bt_${k.id}">Boyamayı temizle</button></div>`;
+      } else if (b.secim) {
+        g += `<div class="tam katman"><span><i style="background:${renkHex(k.renk)}"></i>Otomatik <b class="sayi">${(b.sayiOto ?? b.sayi).toLocaleString('tr-TR')}</b></span><span><i style="background:#17c3ff"></i>Fırça/çizgi <b class="sayi">+${(b.sayiEl || 0).toLocaleString('tr-TR')}</b></span><span><i style="background:#e5484d"></i>Silinen <b class="sayi">−${(b.sayiSil || 0).toLocaleString('tr-TR')}</b></span></div>`;
         g += `<div class="tam bilgi">Seçili: <span class="sayi">${b.sayi.toLocaleString('tr-TR')}</span> üçgen · <span class="sayi">${k.en.toFixed(1)} × ${k.boy.toFixed(1)}</span> mm ${b.cikinti ? ' · <b>çıkıntı</b>: kökünden ayrılacak' : ` · girinti <span class="sayi">${b.girinti.toFixed(2)}</span> mm`}${b.uyari ? `<br><b>${esc(b.uyari)}</b>` : ''}</div>`;
         g += sayiAlan('be_' + k.id, 'Tıkaç dili: bölgenin altına ek derinlik (mm)', b.ek, 0.5, 15, 0.05, 'tam');
         g += `<details class="tam"><summary>İnce ayar</summary><div class="izgara" style="grid-template-columns:1fr 1fr">
@@ -1369,7 +1382,7 @@ function kesimHTML(k, i) {
         if (b.kanatOneri) g += `<div class="tam bilgi"><b>Bu ince bir kanat gibi görünüyor</b> (kalınlık <span class="sayi">${b.kanatOneri.T.toFixed(2)}</span> mm). Tek yüzü değil, kanadın tamamını kökünden dilli ayırmak için:</div><div class="tam"><button type="button" class="btn ana kucuk" id="bk_${k.id}">Kanat olarak ayır</button></div>`;
         g += `<div class="tam satir"><button type="button" class="btn kucuk" id="bb_${k.id}">Dış kenara büyüt</button><button type="button" class="btn kucuk" id="bg_${k.id}" ${b.gecmis && b.gecmis.length ? '' : 'disabled'}>Geri al</button><button type="button" class="btn kucuk" id="bt_${k.id}">Seçimi temizle</button></div>`;
         g += `<div class="tam bilgi">"Dış kenara büyüt" seçimi bir sonraki kenara kadar genişletir (camı çerçevesiyle almak için). Tıkladığın her bölge seçime <b>eklenir</b>, <b>Alt</b>+tık o bölgeyi çıkarır. Kalan pürüzleri üstteki <b>Fırça</b> ile boya ya da sil; hepsi aynı seçimdir.</div>`;
-      } else g += `<div class="tam bilgi">${typeof Firca !== 'undefined' && Firca.acik ? (b.modu === 'ikiRenk' ? 'Bir tarafı Ekle, karşıt tarafı Çıkar/Alt+tık ile boya; bıraktığında boşluklar otomatik dolar.' : 'Fırçayla ayırmak istediğin yeri boya. Üstteki çubuktan boyutu ve şekli ayarlayabilirsin.') : b.modu === 'ikiRenk' ? 'Üstten Fırçayı aç, bir tarafı Ekle (A), karşıt tarafı Çıkar/Alt+tık (B) ile boya. Bıraktığında aradaki boşluklar en yakın tarafa otomatik dolar.' : b.modu === 'renk' ? 'Ayırmak istediğin renkli bölgeye tıkla (ör. vizör). Aynı renkteki bitişik yüzey seçilir.' : 'Ayırmak istediğin bölgeye tıkla. Seçim, keskin kenara (girintinin dudağına) kadar yayılır.'}</div>`;
+      } else g += `<div class="tam bilgi">${typeof Firca !== 'undefined' && Firca.acik ? 'Fırçayla ayırmak istediğin yeri boya. Üstteki çubuktan boyutu ve şekli ayarlayabilirsin.' : b.modu === 'renk' ? 'Ayırmak istediğin renkli bölgeye tıkla (ör. vizör). Aynı renkteki bitişik yüzey seçilir.' : 'Ayırmak istediğin bölgeye tıkla. Seçim, keskin kenara (girintinin dudağına) kadar yayılır.'}</div>`;
     } else if (k.mod === 'kanat') {
       const n = k.kanat.tik.length; const adimlar = ['Kanadın bir yüzüne tıkla', 'Kanadın öbür yüzüne tıkla', 'Kanadın bir ucuna tıkla (gövdeye bağlandığı uç)', 'Kanadın öbür ucuna tıkla (en uzak uç)'];
       g += `<div class="tam kanat-adim">${adimlar.map((a, j) => `<div class="${j < n ? 'bitti' : j === n ? 'simdi' : ''}"><b>${j + 1}</b>${a}${j === 1 && n >= 2 ? ` · <span class="sayi">kalınlık ${k.kanat.kalinlik.toFixed(2)} mm</span>` : ''}${j === 3 && n >= 4 ? ` · <span class="sayi">boy ${k.boy.toFixed(1)} mm</span>` : ''}</div>`).join('')}</div>`;
@@ -1522,7 +1535,7 @@ function baglaPanel() {
     if (e('pb_' + k.id)) baglaSayi('pb_' + k.id, v => yaz('pimBoy', v));
   } else {
     if (k.mod === 'bolge') {
-      const b = k.bolge; const yenile = () => { if (b.modu === 'ikiRenk') { bolgeBitir(k); } else if (b.sonOto) { bolgeYukle(b, b.sonOto.once); bolgeUygula(k, b.sonOto.tohum, b.sonOto.sil); } panelCiz(); onizleme(); };
+      const b = k.bolge; const yenile = () => { if (b.modu === 'ikiRenk') { bolgeBitirHafif(k); } else if (b.sonOto) { bolgeYukle(b, b.sonOto.once); bolgeUygula(k, b.sonOto.tohum, b.sonOto.sil); } panelCiz(); onizleme(); };
       e('bm_' + k.id).onchange = ev => { b.modu = ev.target.value; yenile(); };
       if (e('ba_' + k.id)) { baglaSayi('ba_' + k.id, v => { b.aci = v; clearTimeout(b._z); b._z = setTimeout(yenile, 250); }); }
       if (e('be_' + k.id)) baglaSayi('be_' + k.id, v => { b.ek = v; bolgeTikac(k); onizleme(); });
@@ -1530,7 +1543,8 @@ function baglaPanel() {
       if (e('bb_' + k.id)) e('bb_' + k.id).onclick = () => { bolgeBuyut(k); panelCiz(); onizleme(); };
       if (e('bk_' + k.id)) e('bk_' + k.id).onclick = () => { kanataCevir(k); panelCiz(); onizleme(); };
       if (e('bg_' + k.id)) e('bg_' + k.id).onclick = () => { bolgeGeri(k); panelCiz(); onizleme(); };
-      if (e('bt_' + k.id)) e('bt_' + k.id).onclick = () => { Object.assign(b, { tohum: null, secim: null, _ic: null, _kay: null, gecmis: [], sonOto: null, sayiOto: 0, sayiEl: 0, sayiSil: 0 }); k.nokta = null; k.yon = null; k.noktalar = null; panelCiz(); onizleme(); };
+      if (e('ir_' + k.id)) e('ir_' + k.id).onclick = () => { bolgeBitir(k); panelCiz(); onizleme(); };
+      if (e('bt_' + k.id)) e('bt_' + k.id).onclick = () => { Object.assign(b, { tohum: null, secim: null, _ic: null, _kay: null, gecmis: [], sonOto: null, sayiOto: 0, sayiEl: 0, sayiSil: 0, sinirlar: [], _sinirSurum: 0, _taraf: null, _tarafHesapSurum: -1 }); k.nokta = null; k.yon = null; k.noktalar = null; if (typeof Firca !== 'undefined') Firca.cizgiCiz(); panelCiz(); onizleme(); };
       return;
     }
     if (k.mod === 'kanat') {
@@ -2174,7 +2188,7 @@ const Firca = {
     else for (let i = 0; i < 48; i++) L.push(...W(r * Math.cos(2 * Math.PI * i / 48), r * Math.sin(2 * Math.PI * i / 48)), ...W(r * Math.cos(2 * Math.PI * (i + 1) / 48), r * Math.sin(2 * Math.PI * (i + 1) / 48)));
     L.push(...W(-r * 0.15, 0), ...W(r * 0.15, 0), ...W(0, -r * 0.15), ...W(0, r * 0.15));
     const sil = this.mod === 'sil' || this._alt;
-    Gor.imlecAyarla(new Float32Array(L), Gor.rgb(sil ? '#ff4d4d' : getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#16806f'));
+    Gor.imlecAyarla(new Float32Array(L), Gor.rgb(sil ? '#ff4d4d' : '#ff22c0'));
   },
   hareket(e) {
     this._alt = e.altKey; this._bekleyen = e;
@@ -2197,7 +2211,7 @@ const Firca = {
     b.sonOto = null;
     bolgeKaydet(b); b.tasti = false; this._ekli = []; this._silindi = false;
     this.boyuyor = true; this.sonEkran = [e.clientX, e.clientY];
-    const h = this.vur(e); if (h) { this.boya(h); this.son = h; this.imlec(h.p, h.n); }
+    const h = this.vur(e); if (h) { const taraf = sinirTaraf(b); this._boyaTaraf = taraf ? taraf[h.t] : -1; this.boya(h); this.son = h; this.imlec(h.p, h.n); }
   },
   boyaArasi(a, bb, h) {
     // hızlı sürüklemede aradaki boşlukları doldur
@@ -2207,12 +2221,16 @@ const Firca = {
   boya(h, sessiz) {
     const k = seciliKesim(); if (!k || !k.bolge) return; const b = k.bolge, ic = b._ic; const deger = (this.mod === 'sil') !== !!this._alt ? 0 : 1;
     const N = komsuluk().N, d = h.d, r = this.r;
+    const taraf = sinirTaraf(b); const tarafBeklenen = taraf ? (this._boyaTaraf != null ? this._boyaTaraf : taraf[h.t]) : -1;
     if (this.sekil === 'akilli') {
-      const K = komsuluk(), F = D.model.F, V = D.model.V; const cosA = Math.cos(b.aci * Math.PI / 180); const r2 = r * r; const gor = new Set([h.t]); const yig = [h.t];
+      const K = komsuluk(), F = D.model.F, V = D.model.V, nv = V.length / 3; const cosA = Math.cos(b.aci * Math.PI / 180); const r2 = r * r; const gor = new Set([h.t]); const yig = [h.t];
+      const engel = taraf ? sinirEngelKumesi(b) : null;
       while (yig.length) {
         const t = yig.pop(); this.yaz(ic, t, deger);
         for (let c = 0; c < 3; c++) {
-          const s = kenarKomsu(K, F, t, F[3 * t + c], F[3 * t + (c + 1) % 3]); if (s < 0 || gor.has(s)) continue; gor.add(s);
+          const a = F[3 * t + c], bb = F[3 * t + (c + 1) % 3];
+          if (engel && engel.has(sinirKenarAnahtari(nv, a, bb))) continue;   // sınır çizgisi: fırça buradan geçemez
+          const s = kenarKomsu(K, F, t, a, bb); if (s < 0 || gor.has(s)) continue; gor.add(s);
           if (N[3 * t] * N[3 * s] + N[3 * t + 1] * N[3 * s + 1] + N[3 * t + 2] * N[3 * s + 2] < cosA) continue;
           let yakin = false; for (let j = 0; j < 3; j++) { const v = F[3 * s + j] * 3; const dx = V[v] - h.p[0], dy = V[v + 1] - h.p[1], dz = V[v + 2] - h.p[2]; if (dx * dx + dy * dy + dz * dz <= r2) { yakin = true; break; } }
           if (yakin) yig.push(s);
@@ -2221,6 +2239,7 @@ const Firca = {
     } else {
       const E = this.sekil === 'kare' ? yardimci.eksen(h.p, h.n) : null; const F = D.model.F, V = D.model.V;
       kureUcgenleri(h.p, this.sekil === 'kare' ? r * Math.SQRT2 : r, t => {
+        if (taraf && taraf[t] !== tarafBeklenen) return;   // sınır çizgisinin öbür tarafına taşma (fırça dışarı taşsa bile)
         if (N[3 * t] * d[0] + N[3 * t + 1] * d[1] + N[3 * t + 2] * d[2] > 0.2) return;   // arka yüzleri boyama
         if (E) { let cx = 0, cy = 0, cz = 0; for (let j = 0; j < 3; j++) { const v = F[3 * t + j] * 3; cx += V[v] / 3; cy += V[v + 1] / 3; cz += V[v + 2] / 3; } const q = [cx - h.p[0], cy - h.p[1], cz - h.p[2]]; if (Math.abs(v3.d(q, E.u)) > r || Math.abs(v3.d(q, E.v)) > r) return; }
         this.yaz(ic, t, deger);
@@ -2250,19 +2269,22 @@ const Firca = {
     const ip = {
       firca: 'Sol tık sürükle: boya · <b>Alt</b> basılı ya da "Çıkar": sil · <b>[ ]</b>: boyut',
       bolge: 'Tıkla: o bölgenin tamamını ekle · <b>Alt</b>+tık ya da "Çıkar": o bölgeyi çıkar',
-      cizgi: 'Tıkla tıkla sınır çiz (çizgi keskin kenarı kendisi takip eder) · ilk noktaya tıkla ya da <b>Enter</b>: kapat · sonra <b>içine tıkla</b> · noktayı sürükleyerek düzelt · <b>Backspace</b>: son nokta · <b>Shift</b>+tık: düz çizgi',
+      cizgi: 'Tıkla tıkla sınır çiz (çizgi keskin kenarı kendisi takip eder) · ilk noktaya tıkla ya da <b>Enter</b>: kapat (kalıcı duvar olur, fırça geçemez) · sonra <b>içine tıkla</b>: boyar · ya da tekrar <b>Enter</b>: yeni, ayrı bir sınır çiz · noktayı sürükleyerek düzelt · <b>Backspace</b>: son nokta · <b>Shift</b>+tık: düz çizgi',
       cikinti: 'Kanat, kulak, anten gibi ince çıkıntıya tıkla: kalınlığa bakıp tamamını seçer',
     }[a];
     $('#fIp').innerHTML = ip + ' · Döndür: orta tuş ya da <b>Boşluk</b>+sürükle · Sağ tık: kaydır · Hepsi açık olan akıllı seçimi düzenler';
-    if (a !== 'cizgi') this.cizgiTemizle();
+    if (a !== 'cizgi') { this.cz = { nok: [], yol: [], kapali: false }; this.nokSurukle = -1; }
+    this.cizgiCiz();   // kalıcı sınırlar her araçta görünsün
     if (Gor) Gor.imlecAyarla(null);
   },
   imlecKucuk(p, n) {
     const m = D.model; const s = Math.max(m.hi[0] - m.lo[0], m.hi[1] - m.lo[1], m.hi[2] - m.lo[2]) * 0.008;
     const E = yardimci.eksen(p, n); const W = (x, y) => [p[0] + E.u[0] * x + E.v[0] * y, p[1] + E.u[1] * x + E.v[1] * y, p[2] + E.u[2] * x + E.v[2] * y];
-    Gor.imlecAyarla(new Float32Array([...W(-s, 0), ...W(s, 0), ...W(0, -s), ...W(0, s)]), Gor.rgb(this.mod === 'sil' || this._alt ? '#ff4d4d' : '#2fbf71'));
+    Gor.imlecAyarla(new Float32Array([...W(-s, 0), ...W(s, 0), ...W(0, -s), ...W(0, s)]), Gor.rgb(this.mod === 'sil' || this._alt ? '#ff4d4d' : '#17c3ff'));
   },
   // ---------------------------------------------------------------- sınır çizgisi
+  // Kapanan her çizgi kalıcı bir "duvar" olarak bölgeye kaydedilir (araç değiştirince ya da
+  // yeni bir çizgiye başlayınca kaybolmaz); fırça/bölge/çizgi-doldur bu duvarları geçemez.
   cizgiTik(e, k, silme) {
     const cz = this.cz; const ek = [e.clientX, e.clientY];
     // var olan noktayı sürükle
@@ -2274,9 +2296,24 @@ const Firca = {
     if (cz.nok.length > 1) cz.yol[cz.nok.length - 2] = kenarYolu(cz.nok[cz.nok.length - 2].v, v, this.miknatis && !e.shiftKey);
     this.cizgiCiz();
   },
-  cizgiKapat() { const cz = this.cz; if (cz.nok.length < 3 || cz.kapali) return; cz.kapali = true; const n = cz.nok.length; cz.yol[n - 1] = kenarYolu(cz.nok[n - 1].v, cz.nok[0].v, this.miknatis); this.cizgiCiz(); },
+  cizgiKapat() {
+    const cz = this.cz;
+    if (cz.kapali) { this.cz = { nok: [], yol: [], kapali: false }; this.nokSurukle = -1; this.cizgiCiz(); return; }   // zaten kapalı: yeni, bağımsız bir çizgiye başla
+    if (cz.nok.length < 3) return;
+    cz.kapali = true; const n = cz.nok.length; cz.yol[n - 1] = kenarYolu(cz.nok[n - 1].v, cz.nok[0].v, this.miknatis);
+    const k = this.kesim(); if (k) this.sinirKaydet(k.bolge, cz);
+    this.cizgiCiz();
+  },
+  sinirKaydet(b, cz) {
+    const halka = []; for (const y of cz.yol) if (y) for (let i = 0; i + 1 < y.length; i++) halka.push([y[i], y[i + 1]]);
+    if (halka.length >= 3) { b.sinirlar = b.sinirlar || []; b.sinirlar.push(halka); b._sinirSurum = (b._sinirSurum || 0) + 1; }
+  },
   cizgiGeri() { const cz = this.cz; if (cz.kapali) { cz.kapali = false; cz.yol.length = cz.nok.length - 1; } else { cz.nok.pop(); cz.yol.length = Math.max(0, cz.nok.length - 1); } this.cizgiCiz(); },
-  cizgiTemizle() { this.cz = { nok: [], yol: [], kapali: false }; this.nokSurukle = -1; if (Gor) Gor.cizgiAyarla(null); this.cizgiDurum(); },
+  cizgiTemizle() { this.cz = { nok: [], yol: [], kapali: false }; this.nokSurukle = -1; this.cizgiCiz(); },
+  sinirlariSil() {
+    const k = seciliKesim(); if (k && k.bolge) { k.bolge.sinirlar = []; k.bolge._sinirSurum = (k.bolge._sinirSurum || 0) + 1; }
+    this.cizgiTemizle();
+  },
   noktaTasi(e) {
     this._bekleyenN = e; if (this._rafN) return;
     this._rafN = requestAnimationFrame(() => {
@@ -2289,35 +2326,45 @@ const Firca = {
     });
   },
   cizgiCiz() {
-    const cz = this.cz, V = D.model.V; const L = [];
-    for (const y of cz.yol) if (y) for (let i = 0; i + 1 < y.length; i++) { const a = 3 * y[i], b = 3 * y[i + 1]; L.push(V[a], V[a + 1], V[a + 2], V[b], V[b + 1], V[b + 2]); }
-    const m = D.model; const s = Math.max(m.hi[0] - m.lo[0], m.hi[1] - m.lo[1], m.hi[2] - m.lo[2]) * 0.006;
-    cz.nok.forEach((q, i) => { const r = i === 0 && !cz.kapali ? s * 1.8 : s; const p = q.p; for (let j = 0; j < 3; j++) { const a = p.slice(), b = p.slice(); a[j] -= r; b[j] += r; L.push(...a, ...b); } });
+    const V = D.model ? D.model.V : null; const L = [];
+    if (V && this.acik) {
+      const k = seciliKesim();
+      if (k && k.bolge && k.bolge.sinirlar) for (const halka of k.bolge.sinirlar) for (const [a, bv] of halka) L.push(V[3 * a], V[3 * a + 1], V[3 * a + 2], V[3 * bv], V[3 * bv + 1], V[3 * bv + 2]);
+      if (this.arac === 'cizgi') {
+        const cz = this.cz;
+        for (const y of cz.yol) if (y) for (let i = 0; i + 1 < y.length; i++) { const a = 3 * y[i], b = 3 * y[i + 1]; L.push(V[a], V[a + 1], V[a + 2], V[b], V[b + 1], V[b + 2]); }
+        const m = D.model; const s = Math.max(m.hi[0] - m.lo[0], m.hi[1] - m.lo[1], m.hi[2] - m.lo[2]) * 0.006;
+        cz.nok.forEach((q, i) => { const r = i === 0 && !cz.kapali ? s * 1.8 : s; const p = q.p; for (let j = 0; j < 3; j++) { const a = p.slice(), b = p.slice(); a[j] -= r; b[j] += r; L.push(...a, ...b); } });
+      }
+    }
     Gor.cizgiAyarla(L.length ? new Float32Array(L) : null, Gor.rgb('#ffb000'));
     this.cizgiDurum();
   },
-  cizgiDurum() { const b = $('#fCizKapat'); if (b) { b.disabled = this.cz.kapali || this.cz.nok.length < 3; b.textContent = this.cz.kapali ? 'Kapalı · içine tıkla' : 'Çizgiyi kapat'; } },
+  cizgiDurum() { const b = $('#fCizKapat'); if (b) { b.disabled = this.cz.kapali || this.cz.nok.length < 3; b.textContent = this.cz.kapali ? 'Kapalı · içine tıkla, ya da yeni çizgi için Enter' : 'Çizgiyi kapat'; } },
   cizgiDoldur(k, h, silme) {
     const cz = this.cz, m = D.model, F = m.F, K = komsuluk(); const nf = F.length / 3; const nv = m.V.length / 3;
-    const engel = new Set(); for (const y of cz.yol) for (let i = 0; i + 1 < y.length; i++) { const a = y[i], b = y[i + 1]; engel.add(a < b ? a * nv + b : b * nv + a); }
+    const b = k.bolge; const engel = sinirEngelKumesi(b);   // bu kesimin tüm kalıcı sınırları + şimdi kapatılan çizgi
+    for (const y of cz.yol) for (let i = 0; i + 1 < y.length; i++) engel.add(sinirKenarAnahtari(nv, y[i], y[i + 1]));
     const gor = new Uint8Array(nf); const S = [h.t], yig = [h.t]; gor[h.t] = 1; let alan = 0, top = 0;
     for (let t = 0; t < nf; t++) top += K.A[t];
     while (yig.length) {
       const t = yig.pop(); alan += K.A[t];
       for (let c = 0; c < 3; c++) {
-        const a = F[3 * t + c], b = F[3 * t + (c + 1) % 3]; if (engel.has(a < b ? a * nv + b : b * nv + a)) continue;
-        const s = kenarKomsu(K, F, t, a, b); if (s < 0 || gor[s]) continue; gor[s] = 1; S.push(s); yig.push(s);
+        const a = F[3 * t + c], bb = F[3 * t + (c + 1) % 3]; if (engel.has(sinirKenarAnahtari(nv, a, bb))) continue;
+        const s = kenarKomsu(K, F, t, a, bb); if (s < 0 || gor[s]) continue; gor[s] = 1; S.push(s); yig.push(s);
       }
     }
     if (alan > top * 0.5) { $('#ipucu').innerHTML = '<span class="vurgu">Çizginin dışına tıkladın (ya da çizgi bölgeyi tam kapatmıyor). Çizginin içine tıkla.</span>'; return; }
-    const b = k.bolge; bolgeKaydet(b); b.sonOto = null;
+    bolgeKaydet(b); b.sonOto = null;
     for (const t of S) bolgeYaz(b, t, !silme, 2);
-    bolgeBitir(k); this.cizgiTemizle(); panelCiz(); onizleme();
+    if (b.modu === 'ikiRenk') bolgeBitirHafif(k); else bolgeBitir(k);
+    this.cizgiTemizle(); panelCiz(); onizleme();
   },
   bitir() {
     this.boyuyor = false; const k = seciliKesim(); if (!k || !k.bolge) return;
     if (this._rafB) { cancelAnimationFrame(this._rafB); this._rafB = 0; } this._ekli = []; this._silindi = false;
-    bolgeBitir(k); panelCiz(); onizleme();
+    if (k.bolge.modu === 'ikiRenk') bolgeBitirHafif(k); else bolgeBitir(k);
+    panelCiz(); onizleme();
   },
   geri() { const k = seciliKesim(); if (k && k.bolge) { bolgeGeri(k); panelCiz(); onizleme(); } },
 };
@@ -2330,6 +2377,7 @@ const Firca = {
   document.querySelectorAll('[data-fa]').forEach(b => b.onclick = () => Firca.aracSec(b.dataset.fa));
   $('#fCizKapat').onclick = () => Firca.cizgiKapat();
   $('#fCizSil').onclick = () => Firca.cizgiTemizle();
+  $('#fCizSinirSil').onclick = () => Firca.sinirlariSil();
   $('#fMik').onchange = e => { Firca.miknatis = e.target.checked; };
   Firca.aracSec('firca');
   $('#fBoy').oninput = e => { const v = parseFloat(e.target.value); if (v > 0) Firca.boyut(v); };
@@ -2365,6 +2413,40 @@ function bolgeHazirla(b) {
   const nf = D.model.F.length / 3;
   if (!b._ic || b._ic.length !== nf) { b._ic = new Uint8Array(nf); b._kay = new Uint8Array(nf); b.gecmis = []; }
   if (!b._kay || b._kay.length !== nf) { b._kay = new Uint8Array(nf); for (let t = 0; t < nf; t++) if (b._ic[t]) b._kay[t] = 1; }
+  if (!b.sinirlar) { b.sinirlar = []; b._sinirSurum = 0; }
+}
+// kalıcı sınır çizgileri: fırçanın/bölge aracının geçemeyeceği duvarlar (araç değiştirince kaybolmaz)
+function sinirKenarAnahtari(nv, a, b) { return a < b ? a * nv + b : b * nv + a; }
+function sinirEngelKumesi(b) {
+  const nv = D.model.V.length / 3, s = new Set();
+  for (const halka of (b.sinirlar || [])) for (const [a, bb] of halka) s.add(sinirKenarAnahtari(nv, a, bb));
+  return s;
+}
+// her üçgene, sınır çizgileri "kesilmiş" gibi davranan bir bağlı-bileşen (taraf) kimliği verir
+function sinirTarafHesapla(b) {
+  const m = D.model, F = m.F, K = komsuluk(); const nf = F.length / 3, nv = m.V.length / 3;
+  const engel = sinirEngelKumesi(b); const taraf = new Int32Array(nf).fill(-1); let id = 0;
+  for (let t0 = 0; t0 < nf; t0++) {
+    if (taraf[t0] !== -1) continue;
+    const yig = [t0]; taraf[t0] = id;
+    while (yig.length) {
+      const t = yig.pop();
+      for (let c = 0; c < 3; c++) {
+        const a = F[3 * t + c], bb = F[3 * t + (c + 1) % 3];
+        if (engel.has(sinirKenarAnahtari(nv, a, bb))) continue;
+        const s = kenarKomsu(K, F, t, a, bb); if (s < 0 || taraf[s] !== -1) continue;
+        taraf[s] = id; yig.push(s);
+      }
+    }
+    id++;
+  }
+  return taraf;
+}
+// taraf dizisini döndürür (sınır yoksa null = kısıtlama yok); sinirlar değişmediği sürece önbelleklenir
+function sinirTaraf(b) {
+  if (!b.sinirlar || !b.sinirlar.length) return null;
+  if (b._tarafHesapSurum !== b._sinirSurum) { b._taraf = sinirTarafHesapla(b); b._tarafHesapSurum = b._sinirSurum; }
+  return b._taraf;
 }
 function bolgeAnlik(b) { return { ic: b._ic.slice(), kay: b._kay.slice() }; }
 function bolgeKaydet(b) { bolgeHazirla(b); b.gecmis = b.gecmis || []; b.gecmis.push(bolgeAnlik(b)); if (b.gecmis.length > 40) b.gecmis.shift(); }
@@ -2429,16 +2511,27 @@ function bolgeBitir(k) {
   if (R && !k.renkElle) { const say = new Map(); for (const t of S) say.set(R[t], (say.get(R[t]) || 0) + 1); let en = 0, ec = 0; for (const [c, n] of say) if (n > en) { en = n; ec = c; } k.renk = enYakinRenk(filamentRgb(ec)); }
   bolgeTikac(k);
 }
+// iki renk modunda boyarken (her fırça vuruşunda) çağrılır: sadece sayaçları günceller,
+// pahalı boşluk-doldurma (ikiRenkDoldur) ve tıkaç geometrisini (bolgeTikac) HESAPLAMAZ.
+// Gerçek ayrım, kullanıcı panelden "iki rengi ayır" dediğinde bolgeBitir ile yapılır.
+function bolgeBitirHafif(k) {
+  const b = k.bolge; const ic = b._ic, kay = b._kay; let so = 0, se = 0, ss = 0, toplam = 0;
+  for (let t = 0; t < ic.length; t++) { if (ic[t]) { toplam++; if (kay[t] === 2) se++; else so++; } else if (kay[t] === 3) ss++; }
+  b.sayiOto = so; b.sayiEl = se; b.sayiSil = ss; b.sayi = toplam; b.surum = (b.surum || 0) + 1;
+}
 // tohumdan taşan bölge (seçimden bağımsız): renk modunda aynı boya, kenar modunda keskin kenara kadar
 function bolgeBul(k, tohum) {
-  const m = D.model, F = m.F, K = komsuluk(), b = k.bolge, N = K.N; const nf = F.length / 3;
+  const m = D.model, F = m.F, K = komsuluk(), b = k.bolge, N = K.N, nv = m.V.length / 3; const nf = F.length / 3;
   const renkli = b.modu === 'renk' && m.renk; const R = m.renk; const cosA = Math.cos(b.aci * Math.PI / 180);
+  const engel = sinirTaraf(b) ? sinirEngelKumesi(b) : null;
   const gor = new Uint8Array(nf); gor[tohum] = 1; const S = [tohum], yig = [tohum]; const r0 = renkli ? R[tohum] : 0;
   const n0 = [N[3 * tohum], N[3 * tohum + 1], N[3 * tohum + 2]];
   while (yig.length) {
     const t = yig.pop();
     for (let c = 0; c < 3; c++) {
-      const s = kenarKomsu(K, F, t, F[3 * t + c], F[3 * t + (c + 1) % 3]); if (s < 0 || gor[s]) continue;
+      const a = F[3 * t + c], bb = F[3 * t + (c + 1) % 3];
+      if (engel && engel.has(sinirKenarAnahtari(nv, a, bb))) continue;   // sınır çizgisi: öbür tarafa geçme
+      const s = kenarKomsu(K, F, t, a, bb); if (s < 0 || gor[s]) continue;
       if (renkli) { if (R[s] !== r0) continue; }
       else {
         if (N[3 * t] * N[3 * s] + N[3 * t + 1] * N[3 * s + 1] + N[3 * t + 2] * N[3 * s + 2] < cosA) continue;
@@ -2451,7 +2544,8 @@ function bolgeBul(k, tohum) {
 }
 function bolgeUygula(k, tohum, sil) {
   const b = k.bolge; for (const t of bolgeBul(k, tohum)) bolgeYaz(b, t, !sil, 1);
-  if (!sil) b.tohum = tohum; bolgeBitir(k);
+  if (!sil) b.tohum = tohum;
+  if (b.modu === 'ikiRenk') bolgeBitirHafif(k); else bolgeBitir(k);
 }
 // tıklama: bölgeyi mevcut seçime ekle (sil: çıkar). Fırça ile aynı seçim üzerinde çalışır.
 function bolgeSec(k, tohum, sil) {

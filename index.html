@@ -2092,8 +2092,8 @@ function cikintiSec(k, h, silme) {
       }
       if (S.length > nf * 0.5) { $('#ipucu').innerHTML = '<span class="vurgu">Çıkıntı gövdeden ayrılamadı. Fırça ile düzelt ya da Çizgi aracıyla kökünü çiz.</span>'; return; }
       const b = k.bolge; bolgeKaydet(b); b.sonOto = null; b.cikintiT = T0; b.cikintiYuz = h.t; b.cikintiN = pn;
-      for (const t of S) bolgeYaz(b, t, !silme, 1);
-      bolgeBitir(k);
+      for (const t of S) { if (b.modu === 'ikiRenk') bolgeYazIR(b, t, !silme, 1); else bolgeYaz(b, t, !silme, 1); }
+      if (b.modu === 'ikiRenk') bolgeBitirHafif(k); else bolgeBitir(k);
     } finally { ilerleme.kapa(); panelCiz(); onizleme(); }
   }, 30);
 }
@@ -2248,7 +2248,17 @@ const Firca = {
     if (!sessiz) this.cizSecim(k);
   },
   _ekli: [], _silindi: false,
-  yaz(ic, t, deger) { if (ic[t] === deger) return; const b = seciliKesim().bolge; bolgeYaz(b, t, !!deger, 2); if (deger) this._ekli.push(t); else this._silindi = true; },
+  yaz(ic, t, deger) {
+    const b = seciliKesim().bolge;
+    if (b.modu === 'ikiRenk') {
+      if (deger ? ic[t] === 1 : b._kay[t] === 3) return;   // zaten tam istenen durumda (A ya da açıkça B)
+      bolgeYazIR(b, t, !!deger, 2);
+    } else {
+      if (ic[t] === deger) return;
+      bolgeYaz(b, t, !!deger, 2);
+    }
+    if (deger) this._ekli.push(t); else this._silindi = true;
+  },
   cizSecim(k) {
     if (this._rafB) return;
     this._rafB = requestAnimationFrame(() => {
@@ -2356,7 +2366,7 @@ const Firca = {
     }
     if (alan > top * 0.5) { $('#ipucu').innerHTML = '<span class="vurgu">Çizginin dışına tıkladın (ya da çizgi bölgeyi tam kapatmıyor). Çizginin içine tıkla.</span>'; return; }
     bolgeKaydet(b); b.sonOto = null;
-    for (const t of S) bolgeYaz(b, t, !silme, 2);
+    for (const t of S) { if (b.modu === 'ikiRenk') bolgeYazIR(b, t, !silme, 2); else bolgeYaz(b, t, !silme, 2); }
     if (b.modu === 'ikiRenk') bolgeBitirHafif(k); else bolgeBitir(k);
     this.cizgiTemizle(); panelCiz(); onizleme();
   },
@@ -2455,6 +2465,13 @@ function bolgeYaz(b, t, sec, kaynak) {
   if (sec) { if (!b._ic[t]) { b._ic[t] = 1; b._kay[t] = kaynak; } }
   else if (b._ic[t]) { b._ic[t] = 0; b._kay[t] = 3; }
 }
+// iki renk modunda B (Çıkar) ayrı, açık bir boya durumudur (sadece "A'yı geri al" değil):
+// daha önce hiç boyanmamış (bakir) bir üçgene de doğrudan B olarak işaretlenebilsin diye
+// bolgeYaz'daki "zaten seçiliyse" koşulu olmadan, koşulsuz yazar.
+function bolgeYazIR(b, t, sec, kaynak) {
+  if (sec) { b._ic[t] = 1; b._kay[t] = kaynak; }
+  else { b._ic[t] = 0; b._kay[t] = 3; }
+}
 // tohumlardan taşma: renk modunda aynı boya, kenar modunda keskin kenara kadar
 function bolgeYay(k, tohumlar, n0, minDot) {
   const m = D.model, F = m.F, K = komsuluk(), b = k.bolge, N = K.N, ic = b._ic;
@@ -2546,7 +2563,7 @@ function bolgeBul(k, tohum) {
   return S;
 }
 function bolgeUygula(k, tohum, sil) {
-  const b = k.bolge; for (const t of bolgeBul(k, tohum)) bolgeYaz(b, t, !sil, 1);
+  const b = k.bolge; for (const t of bolgeBul(k, tohum)) { if (b.modu === 'ikiRenk') bolgeYazIR(b, t, !sil, 1); else bolgeYaz(b, t, !sil, 1); }
   if (!sil) b.tohum = tohum;
   if (b.modu === 'ikiRenk') bolgeBitirHafif(k); else bolgeBitir(k);
 }

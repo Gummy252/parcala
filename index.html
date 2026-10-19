@@ -1353,9 +1353,10 @@ function kesimHTML(k, i) {
       }
     } else if (k.mod === 'bolge') {
       const b = k.bolge;
-      g += secim('bm_' + k.id, 'Nasıl seçilsin', b.modu, [['renk', 'Renge göre (boyalı modelde)'], ['kenar', 'Kenara / derinliğe göre']], true);
+      g += secim('bm_' + k.id, 'Nasıl seçilsin', b.modu, [['renk', 'Renge göre (boyalı modelde)'], ['kenar', 'Kenara / derinliğe göre'], ['ikiRenk', 'Elle boya: 2 zıt renk + boşlukları doldur']], true);
       if (b.modu === 'renk' && !(D.model && D.model.renk)) g += `<div class="tam bilgi">Bu modelde boya bilgisi yok. "Kenara / derinliğe göre" seç.</div>`;
       if (b.modu === 'kenar') g += sayiAlan('ba_' + k.id, 'Hassasiyet: bu açıdan keskin kenarda dur (°)', b.aci, 3, 80, 1, 'tam');
+      if (b.modu === 'ikiRenk') g += `<div class="tam bilgi">Fırça/Bölge/Çizgi aracıyla bir tarafı <b>Ekle</b> (A rengi), karşıt tarafı <b>Çıkar</b>/Alt+tık (B rengi) ile boya. Hiç boyamadığın ara bölgeler, fırçayı bıraktığın anda yüzey üzerinden en yakın tarafa otomatik katılır; parça yine mevcut pim/yuva ile ayrılır.</div>`;
       if (b.secim) {
         g += `<div class="tam katman"><span><i style="background:${renkHex(k.renk)}"></i>Otomatik <b class="sayi">${(b.sayiOto ?? b.sayi).toLocaleString('tr-TR')}</b></span><span><i style="background:#2fbf71"></i>Fırça/çizgi <b class="sayi">+${(b.sayiEl || 0).toLocaleString('tr-TR')}</b></span><span><i style="background:#e5484d"></i>Silinen <b class="sayi">−${(b.sayiSil || 0).toLocaleString('tr-TR')}</b></span></div>`;
         g += `<div class="tam bilgi">Seçili: <span class="sayi">${b.sayi.toLocaleString('tr-TR')}</span> üçgen · <span class="sayi">${k.en.toFixed(1)} × ${k.boy.toFixed(1)}</span> mm ${b.cikinti ? ' · <b>çıkıntı</b>: kökünden ayrılacak' : ` · girinti <span class="sayi">${b.girinti.toFixed(2)}</span> mm`}${b.uyari ? `<br><b>${esc(b.uyari)}</b>` : ''}</div>`;
@@ -1368,7 +1369,7 @@ function kesimHTML(k, i) {
         if (b.kanatOneri) g += `<div class="tam bilgi"><b>Bu ince bir kanat gibi görünüyor</b> (kalınlık <span class="sayi">${b.kanatOneri.T.toFixed(2)}</span> mm). Tek yüzü değil, kanadın tamamını kökünden dilli ayırmak için:</div><div class="tam"><button type="button" class="btn ana kucuk" id="bk_${k.id}">Kanat olarak ayır</button></div>`;
         g += `<div class="tam satir"><button type="button" class="btn kucuk" id="bb_${k.id}">Dış kenara büyüt</button><button type="button" class="btn kucuk" id="bg_${k.id}" ${b.gecmis && b.gecmis.length ? '' : 'disabled'}>Geri al</button><button type="button" class="btn kucuk" id="bt_${k.id}">Seçimi temizle</button></div>`;
         g += `<div class="tam bilgi">"Dış kenara büyüt" seçimi bir sonraki kenara kadar genişletir (camı çerçevesiyle almak için). Tıkladığın her bölge seçime <b>eklenir</b>, <b>Alt</b>+tık o bölgeyi çıkarır. Kalan pürüzleri üstteki <b>Fırça</b> ile boya ya da sil; hepsi aynı seçimdir.</div>`;
-      } else g += `<div class="tam bilgi">${typeof Firca !== 'undefined' && Firca.acik ? 'Fırçayla ayırmak istediğin yeri boya. Üstteki çubuktan boyutu ve şekli ayarlayabilirsin.' : b.modu === 'renk' ? 'Ayırmak istediğin renkli bölgeye tıkla (ör. vizör). Aynı renkteki bitişik yüzey seçilir.' : 'Ayırmak istediğin bölgeye tıkla. Seçim, keskin kenara (girintinin dudağına) kadar yayılır.'}</div>`;
+      } else g += `<div class="tam bilgi">${typeof Firca !== 'undefined' && Firca.acik ? (b.modu === 'ikiRenk' ? 'Bir tarafı Ekle, karşıt tarafı Çıkar/Alt+tık ile boya; bıraktığında boşluklar otomatik dolar.' : 'Fırçayla ayırmak istediğin yeri boya. Üstteki çubuktan boyutu ve şekli ayarlayabilirsin.') : b.modu === 'ikiRenk' ? 'Üstten Fırçayı aç, bir tarafı Ekle (A), karşıt tarafı Çıkar/Alt+tık (B) ile boya. Bıraktığında aradaki boşluklar en yakın tarafa otomatik dolar.' : b.modu === 'renk' ? 'Ayırmak istediğin renkli bölgeye tıkla (ör. vizör). Aynı renkteki bitişik yüzey seçilir.' : 'Ayırmak istediğin bölgeye tıkla. Seçim, keskin kenara (girintinin dudağına) kadar yayılır.'}</div>`;
     } else if (k.mod === 'kanat') {
       const n = k.kanat.tik.length; const adimlar = ['Kanadın bir yüzüne tıkla', 'Kanadın öbür yüzüne tıkla', 'Kanadın bir ucuna tıkla (gövdeye bağlandığı uç)', 'Kanadın öbür ucuna tıkla (en uzak uç)'];
       g += `<div class="tam kanat-adim">${adimlar.map((a, j) => `<div class="${j < n ? 'bitti' : j === n ? 'simdi' : ''}"><b>${j + 1}</b>${a}${j === 1 && n >= 2 ? ` · <span class="sayi">kalınlık ${k.kanat.kalinlik.toFixed(2)} mm</span>` : ''}${j === 3 && n >= 4 ? ` · <span class="sayi">boy ${k.boy.toFixed(1)} mm</span>` : ''}</div>`).join('')}</div>`;
@@ -1521,7 +1522,7 @@ function baglaPanel() {
     if (e('pb_' + k.id)) baglaSayi('pb_' + k.id, v => yaz('pimBoy', v));
   } else {
     if (k.mod === 'bolge') {
-      const b = k.bolge; const yenile = () => { if (b.sonOto) { bolgeYukle(b, b.sonOto.once); bolgeUygula(k, b.sonOto.tohum, b.sonOto.sil); } panelCiz(); onizleme(); };
+      const b = k.bolge; const yenile = () => { if (b.modu === 'ikiRenk') { bolgeBitir(k); } else if (b.sonOto) { bolgeYukle(b, b.sonOto.once); bolgeUygula(k, b.sonOto.tohum, b.sonOto.sil); } panelCiz(); onizleme(); };
       e('bm_' + k.id).onchange = ev => { b.modu = ev.target.value; yenile(); };
       if (e('ba_' + k.id)) { baglaSayi('ba_' + k.id, v => { b.aci = v; clearTimeout(b._z); b._z = setTimeout(yenile, 250); }); }
       if (e('be_' + k.id)) baglaSayi('be_' + k.id, v => { b.ek = v; bolgeTikac(k); onizleme(); });
@@ -2396,8 +2397,31 @@ function bolgeYay(k, tohumlar, n0, minDot) {
   }
   return eklenen;
 }
+// iki renk modu: A (kay 1/2, "Ekle") ve B (kay 3, "Çıkar") tohumlarından başlayıp,
+// hiç boyanmamış (kay 0) üçgenleri komşuluk üzerinden en yakın tarafa doldurur (çok-kaynaklı BFS, ağ uzaklığı).
+function ikiRenkDoldur(b) {
+  const m = D.model, F = m.F, K = komsuluk(); const nf = F.length / 3;
+  const kay = b._kay, durum = new Int8Array(nf).fill(-1), kuyruk = [];
+  for (let t = 0; t < nf; t++) {
+    if (kay[t] === 1 || kay[t] === 2) { durum[t] = 1; kuyruk.push(t); }
+    else if (kay[t] === 3) { durum[t] = 0; kuyruk.push(t); }
+  }
+  let bas = 0;
+  while (bas < kuyruk.length) {
+    const t = kuyruk[bas++]; const d = durum[t];
+    for (let c = 0; c < 3; c++) {
+      const s = kenarKomsu(K, F, t, F[3 * t + c], F[3 * t + (c + 1) % 3]);
+      if (s < 0 || durum[s] !== -1) continue;
+      durum[s] = d; kuyruk.push(s);
+    }
+  }
+  const ic = new Uint8Array(nf); for (let t = 0; t < nf; t++) if (durum[t] === 1) ic[t] = 1;
+  return ic;
+}
 function bolgeBitir(k) {
-  const m = D.model, R = m.renk, b = k.bolge, ic = b._ic; const S = [];
+  const m = D.model, R = m.renk, b = k.bolge;
+  if (b.modu === 'ikiRenk') b._ic = ikiRenkDoldur(b);
+  const ic = b._ic; const S = [];
   let so = 0, se = 0, ss = 0; const kay = b._kay;
   for (let t = 0; t < ic.length; t++) { if (ic[t]) { S.push(t); if (kay[t] === 2) se++; else so++; } else if (kay[t] === 3) ss++; }
   b.secim = Int32Array.from(S); b.sayi = S.length; b.sayiOto = so; b.sayiEl = se; b.sayiSil = ss; b.surum = (b.surum || 0) + 1;

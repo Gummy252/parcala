@@ -2482,7 +2482,8 @@ function bolgeYay(k, tohumlar, n0, minDot) {
 // iki renk modu: A (kay 1/2, "Ekle") ve B (kay 3, "Çıkar") tohumlarından başlayıp,
 // hiç boyanmamış (kay 0) üçgenleri komşuluk üzerinden en yakın tarafa doldurur (çok-kaynaklı BFS, ağ uzaklığı).
 function ikiRenkDoldur(b) {
-  const m = D.model, F = m.F, K = komsuluk(); const nf = F.length / 3;
+  const m = D.model, F = m.F, K = komsuluk(); const nf = F.length / 3, nv = m.V.length / 3;
+  const engel = (b.sinirlar && b.sinirlar.length) ? sinirEngelKumesi(b) : null;   // çizgi duvarları: doldurma bunları geçemez
   const kay = b._kay, durum = new Int8Array(nf).fill(-1), kuyruk = [];
   for (let t = 0; t < nf; t++) {
     if (kay[t] === 1 || kay[t] === 2) { durum[t] = 1; kuyruk.push(t); }
@@ -2492,7 +2493,9 @@ function ikiRenkDoldur(b) {
   while (bas < kuyruk.length) {
     const t = kuyruk[bas++]; const d = durum[t];
     for (let c = 0; c < 3; c++) {
-      const s = kenarKomsu(K, F, t, F[3 * t + c], F[3 * t + (c + 1) % 3]);
+      const a = F[3 * t + c], bb = F[3 * t + (c + 1) % 3];
+      if (engel && engel.has(sinirKenarAnahtari(nv, a, bb))) continue;
+      const s = kenarKomsu(K, F, t, a, bb);
       if (s < 0 || durum[s] !== -1) continue;
       durum[s] = d; kuyruk.push(s);
     }

@@ -233,6 +233,12 @@ function isciAna(M, gonder) {
             if (!yeni || !kalan) throw new Error(`"${k.ad}": kesim düzlemi hedef parçayı kesmiyor. Konumu değiştir.`);
             parcalar.set(k.hedef, kalan); parcalar.set(k.id, yeni);
             if (r.pim) pimler.push({ ad: k.ad, r: r.pim.r, L: r.pim.L });
+          } else if (k.bolge && k.bolge.modu === 'ikiRenk' && k.bolge.baglanti === 'yok') {
+            if (!k.bolgeSecim || !k.bolgeSecim.length) throw new Error(`"${k.ad}": boyama/sınır tamamlanmadı (iki rengi ayırmadın)`);
+            const r = M.sinirAyir(src.V, src.F, k.bolgeSecim);
+            if (!r.parca || !r.parca.F.length) throw new Error(`"${k.ad}": ayrılacak bölge bulunamadı.`);
+            if (!r.kalan || !r.kalan.F.length) throw new Error(`"${k.ad}": seçim hedef parçanın tamamını kaplıyor.`);
+            parcalar.set(k.id, r.parca); parcalar.set(k.hedef, r.kalan);
           } else {
             if (!k.nokta) throw new Error(`"${k.ad}": modelde yer seçilmedi`);
             // akıllı seçimde kesim duvarı bölgenin yan duvarıyla çakışabilir: olmazsa sınırı biraz dışarı/içeri alıp yeniden dene
@@ -535,8 +541,11 @@ function kesimHTML(k, i) {
       if (b.modu === 'ikiRenk') {
         g += `<div class="tam bilgi">Fırça/Bölge/Çizgi ile bir tarafı <b>Ekle</b> (A), karşıt tarafı <b>Çıkar</b>/Alt+tık (B) ile boya. Boyarken hiçbir hesap yapılmaz (akıcı kalır); bitince aşağıdaki düğmeye bas: o an boyanmamış yerler en yakın tarafa otomatik dolar ve parça mevcut pim/yuva ile ayrılır. Çizgi aracıyla çizip kapattığın sınırlar, fırçanın geçemeyeceği kalıcı duvar olur (araç değiştirince kaybolmaz; <b>Enter</b>'a tekrar basarak başka bir sınır daha çizebilirsin).</div>`;
         g += `<div class="tam katman"><span><i style="background:#17c3ff"></i>A (Ekle) <b class="sayi">${((b.sayiEl || 0) + (b.sayiOto || 0)).toLocaleString('tr-TR')}</b></span><span><i style="background:#e5484d"></i>B (Çıkar) <b class="sayi">${(b.sayiSil || 0).toLocaleString('tr-TR')}</b></span></div>`;
-        g += `<div class="tam"><button type="button" class="btn ana kucuk" id="ir_${k.id}">${k.noktalar ? 'Yeniden ayır' : 'Boyamayı bitir, iki rengi ayır'}</button></div>`;
-        if (k.noktalar) {
+        g += secim('bl_' + k.id, 'Bağlantı', b.baglanti || 'tikac', [['tikac', 'Pim/yuva (tıkaç) — küçük, yerel yamalar için (kulak, logo, yama)'], ['yok', 'Yok — düz, bağlantısız ayır (gövdeyi ikiye bölen büyük/eğimli sınırlar için)']], true);
+        g += `<div class="tam"><button type="button" class="btn ana kucuk" id="ir_${k.id}">${k.noktalar || b.baglanti === 'yok' ? 'Yeniden ayır' : 'Boyamayı bitir, iki rengi ayır'}</button></div>`;
+        if (b.baglanti === 'yok') {
+          g += `<div class="tam bilgi">Hiç boyamadan sadece Çizgi aracıyla kapalı bir sınır çizip "Ayır"a basarsan: sınırın ayırdığı <b>küçük</b> taraf otomatik olarak ayrılan parça (A) sayılır.${b.secim ? ` Son ayrımda: <span class="sayi">${(b.sayi || 0).toLocaleString('tr-TR')}</span> üçgen.` : ''}${b.uyari ? `<br><b>${esc(b.uyari)}</b>` : ''}</div>`;
+        } else if (k.noktalar) {
           g += `<div class="tam bilgi">Son ayrımda: <span class="sayi">${(b.sayi || 0).toLocaleString('tr-TR')}</span> üçgen · <span class="sayi">${k.en.toFixed(1)} × ${k.boy.toFixed(1)}</span> mm${b.uyari ? `<br><b>${esc(b.uyari)}</b>` : ''}</div>`;
           g += sayiAlan('be_' + k.id, 'Tıkaç dili: bölgenin altına ek derinlik (mm)', b.ek, 0.5, 15, 0.05, 'tam');
           g += `<details class="tam"><summary>İnce ayar</summary><div class="izgara" style="grid-template-columns:1fr 1fr">
@@ -712,6 +721,7 @@ function baglaPanel() {
     if (k.mod === 'bolge') {
       const b = k.bolge; const yenile = () => { if (b.modu === 'ikiRenk') { bolgeBitirHafif(k); } else if (b.sonOto) { bolgeYukle(b, b.sonOto.once); bolgeUygula(k, b.sonOto.tohum, b.sonOto.sil); } panelCiz(); onizleme(); };
       e('bm_' + k.id).onchange = ev => { b.modu = ev.target.value; yenile(); };
+      if (e('bl_' + k.id)) e('bl_' + k.id).onchange = ev => { b.baglanti = ev.target.value; if (b._ic) bolgeBitir(k); panelCiz(); onizleme(); };
       if (e('ba_' + k.id)) { baglaSayi('ba_' + k.id, v => { b.aci = v; clearTimeout(b._z); b._z = setTimeout(yenile, 250); }); }
       if (e('be_' + k.id)) baglaSayi('be_' + k.id, v => { b.ek = v; bolgeTikac(k); onizleme(); });
       for (const [p, alan] of [['dw_', 'duvar'], ['ip_', 'icPay']]) if (e(p + k.id)) baglaSayi(p + k.id, v => yaz(alan, v));
@@ -1599,6 +1609,7 @@ function bolgeHazirla(b) {
   if (!b._ic || b._ic.length !== nf) { b._ic = new Uint8Array(nf); b._kay = new Uint8Array(nf); b.gecmis = []; }
   if (!b._kay || b._kay.length !== nf) { b._kay = new Uint8Array(nf); for (let t = 0; t < nf; t++) if (b._ic[t]) b._kay[t] = 1; }
   if (!b.sinirlar) { b.sinirlar = []; b._sinirSurum = 0; }
+  if (!b.baglanti) b.baglanti = 'tikac';
 }
 // kalıcı sınır çizgileri: fırçanın/bölge aracının geçemeyeceği duvarlar (araç değiştirince kaybolmaz)
 function sinirKenarAnahtari(nv, a, b) { return a < b ? a * nv + b : b * nv + a; }
@@ -1680,6 +1691,17 @@ function ikiRenkDoldur(b) {
   for (let t = 0; t < nf; t++) {
     if (kay[t] === 1 || kay[t] === 2) { durum[t] = 1; kuyruk.push(t); }
     else if (kay[t] === 3) { durum[t] = 0; kuyruk.push(t); }
+  }
+  // Hiç boya yoksa (sadece çizgi/sınır çizilmiş, A ya da B hiç boyanmamış): çizilen sınır(lar) modeli zaten
+  // bağlı-bileşenlere ayırıyorsa, boyamaya gerek kalmadan küçük bileşeni otomatik "A" (ayrılan parça) yap.
+  if (!kuyruk.length && b.sinirlar && b.sinirlar.length) {
+    const taraf = sinirTarafHesapla(b); let nid = 0; for (let t = 0; t < nf; t++) if (taraf[t] + 1 > nid) nid = taraf[t] + 1;
+    if (nid >= 2) {
+      const say = new Array(nid).fill(0); for (let t = 0; t < nf; t++) say[taraf[t]]++;
+      let enKucuk = 0; for (let i = 1; i < nid; i++) if (say[i] < say[enKucuk]) enKucuk = i;
+      const ic = new Uint8Array(nf); for (let t = 0; t < nf; t++) if (taraf[t] === enKucuk) ic[t] = 1;
+      return ic;
+    }
   }
   let bas = 0;
   while (bas < kuyruk.length) {
@@ -1799,6 +1821,15 @@ function bolgeTikac(k) {
     At += a;
   }
   c = c.map(x => x / At); const nl = Math.hypot(...n); n = nl > 1e-9 ? n.map(x => x / nl) : [K.N[3 * S[0]], K.N[3 * S[0] + 1], K.N[3 * S[0] + 2]];
+  // "Bağlantısız" modda tek bir yerel tıkaç/pim şekli hesaplamanın anlamı yok (seçim modelin tamamına
+  // yayılabilir): önizleme amaçlı tıkaç geometrisi üretmiyoruz, gerçek ayrım isciAna'da sinirAyir ile yapılır.
+  // Hedef parçayı yine de belirlememiz gerekiyor (çoklu kesim sırasında doğru parçadan kesilsin diye):
+  // seçimin ağırlık merkezi (çoğunlukla gövdenin içinde kalır) üzerinden tespit ederiz.
+  if (b.baglanti === 'yok') {
+    b.sinir = null; b.kanatOneri = null; k.nokta = null; k.yon = null; k.noktalar = null; b.uyari = '';
+    if (!k.hedefElle) k.hedef = parcaBul(c, D.kesimler.indexOf(k));
+    return;
+  }
   const yayilma = nl / At;   // 1: düz, 0: kapalı küre
   // sınır kenarları (komşusu seçili olmayan), üçgen yönünde a->b
   const ka = [], kb = [], cik = new Map();     // yönlü sınır kenarları; bir köşeden birden çok çıkabilir
@@ -2012,12 +2043,26 @@ async function modelYukle(ad, buf, ornekKesimler) {
   } catch (e) { panelCiz(); }
 }
 async function calistir() {
-  const eksik = D.kesimler.find(k => k.tip === 'tikac' && !k.nokta);
+  const baglantisiz = k => k.bolge && k.bolge.modu === 'ikiRenk' && k.bolge.baglanti === 'yok';
+  const eksik = D.kesimler.find(k => k.tip === 'tikac' && !baglantisiz(k) && !k.nokta);
   if (eksik) { D.hata = `"${eksik.ad}" için modelde yer seçilmedi.`; D.secili = eksik.id; panelCiz(); onizleme(); return; }
+  const eksikSinir = D.kesimler.find(k => baglantisiz(k) && (!k.bolge.secim || !k.bolge.secim.length));
+  if (eksikSinir) { D.hata = `"${eksikSinir.ad}" için boyama/sınır tamamlanmadı (iki rengi ayır).`; D.secili = eksikSinir.id; panelCiz(); onizleme(); return; }
   D.kesimler.forEach((k, i) => { if (k.tip === 'tikac' && k.nokta && k.yon && !k.hedefElle) k.hedef = parcaBul(v3.cik(k.nokta, v3.k(k.yon, Math.min(0.5, k.derinlik / 2))), i); });
   try {
     const adlar = { model: 'Ana gövde' }; D.kesimler.forEach(k => adlar[k.id] = k.ad);
-    const kesimler = D.kesimler.map(k => { const c = { ...k, hedefAd: adlar[k.hedef] }; delete c._oto; if (c.bolge) c.bolge = { modu: c.bolge.modu }; if (k.tip === 'duz') c.alanHazir = duzAlan(k); return c; });
+    const kesimler = D.kesimler.map(k => {
+      const c = { ...k, hedefAd: adlar[k.hedef] }; delete c._oto;
+      if (c.bolge) {
+        const modu = k.bolge.modu, baglanti = k.bolge.baglanti;
+        c.bolge = { modu, baglanti };
+        // "Bağlantısız" iki-renk ayrımında gerçek üçgen seçimini işçiye gönderiyoruz: sinirAyir, tıkaç gibi
+        // tek bir yerel fiş şekli değil, doğrudan bu seçime göre modeli ikiye bölüp düz kapakla kapatır.
+        if (modu === 'ikiRenk' && baglanti === 'yok' && k.bolge.secim && k.bolge.secim.length) c.bolgeSecim = k.bolge.secim;
+      }
+      if (k.tip === 'duz') c.alanHazir = duzAlan(k);
+      return c;
+    });
     const r = await is({ tip: 'kes', kesimler, ayar: D.ayar }, 'Parçalanıyor');
     D.sonuc = { liste: r.liste, pimler: r.pimler, modelKusur: r.modelKusur, anaAd: 'Gövde' };
     D.mod = 'sonuc'; panelCiz(); onizleme(); sonucCiz();

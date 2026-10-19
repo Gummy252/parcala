@@ -778,6 +778,90 @@ function parcalaMotoru() {
     return sl > 0 ? [sx / sl, sy / sl, sz / sl] : null;
   }
 
+  // basit çokgen kulak kesme (ear clipping): P = [[x,y],...] GİRİŞ YÖNÜYLE AYNEN kullanılır
+  // (CCW/CW tersine çevrilmez — çağıran taraf doğru yönü garanti eder). Dönen: [[yerelI,yerelJ,yerelK],...]
+  function kulakKes2D(P) {
+    const n = P.length; if (n < 3) return [];
+    const idx = []; for (let i = 0; i < n; i++) idx.push(i);
+    const alan2 = (a, b, c) => (P[b][0] - P[a][0]) * (P[c][1] - P[a][1]) - (P[b][1] - P[a][1]) * (P[c][0] - P[a][0]);
+    const icinde = (a, b, c, p) => { const d1 = alan2(a, b, p), d2 = alan2(b, c, p), d3 = alan2(c, a, p); return d1 >= -1e-9 && d2 >= -1e-9 && d3 >= -1e-9; };
+    const ucgenler = []; let guard = 0;
+    while (idx.length > 3 && guard++ < idx.length * idx.length + 64) {
+      let kesildi = false;
+      for (let i = 0; i < idx.length; i++) {
+        const ia = idx[(i - 1 + idx.length) % idx.length], ib = idx[i], ic = idx[(i + 1) % idx.length];
+        if (alan2(ia, ib, ic) <= 1e-9) continue; // dışbükey değil: kulak olamaz
+        let kulak = true;
+        for (const p of idx) { if (p === ia || p === ib || p === ic) continue; if (icinde(ia, ib, ic, p)) { kulak = false; break; } }
+        if (kulak) { ucgenler.push([ia, ib, ic]); idx.splice(i, 1); kesildi = true; break; }
+      }
+      if (!kesildi) break; // bozuk/kendiyle kesişen sınır: olabildiğince kapat, gerisini açık bırak
+    }
+    if (idx.length === 3) ucgenler.push([idx[0], idx[1], idx[2]]);
+    return ucgenler;
+  }
+
+  // sınır ayırma: elle (iki zıt renkle) boyanmış/seçilmiş "S" üçgen kümesini modelin geri kalanından
+  // bağlantısız, düz bir kapakla ayırır (pim/yuva YOK). Tıkaç gibi tek bir yerel "fiş" şekli basmaz;
+  // doğrudan seçilen üçgenlere göre modeli ikiye böler ve her iki parçanın sınırını kendi düzleminde kulak-kesme ile kapatır.
+  // Büyük, düz-olmayan dikişler (ör. tüm gövdeyi ayırma) için bu, tıkaç/pim aracından daha güvenlidir.
+  function sinirAyir(V, F, S) {
+    const nV = V.length / 3, nF = F.length / 3;
+    const inA = new Uint8Array(nF); for (const t of S) inA[t] = 1;
+    // yönlü kenar -> onu taşıyan üçgen (watertight 2-manifold varsayımıyla benzersiz)
+    const kenarSahibi = new Map();
+    for (let t = 0; t < nF; t++) {
+      const a = F[3 * t], b = F[3 * t + 1], c = F[3 * t + 2];
+      kenarSahibi.set(a * nV + b, t); kenarSahibi.set(b * nV + c, t); kenarSahibi.set(c * nV + a, t);
+    }
+    const komsu = (a, b) => { const id = kenarSahibi.get(b * nV + a); return id === undefined ? -1 : id; };
+
+    function parcaCikar(sec) {
+      const yeniIdx = new Int32Array(nV).fill(-1); const Vn = []; let nvn = 0; const Fn = [];
+      const yerelV = i => { if (yeniIdx[i] < 0) { yeniIdx[i] = nvn++; Vn.push(V[3 * i], V[3 * i + 1], V[3 * i + 2]); } return yeniIdx[i]; };
+      for (let t = 0; t < nF; t++) if (sec(t)) { const a = F[3 * t], b = F[3 * t + 1], c = F[3 * t + 2]; Fn.push(yerelV(a), yerelV(b), yerelV(c)); }
+      // sınır kenarları (bu parçaya özel): komşusu bu parçada olmayan kenarlar, yönü korunur
+      const yonlu = new Map();
+      for (let t = 0; t < nF; t++) if (sec(t)) {
+        const vs = [F[3 * t], F[3 * t + 1], F[3 * t + 2]];
+        for (let k = 0; k < 3; k++) { const a = vs[k], b = vs[(k + 1) % 3]; const kt = komsu(a, b); if (kt < 0 || !sec(kt)) yonlu.set(yerelV(a), yerelV(b)); }
+      }
+      // döngüleri zincirle (dallanma/bozuk sınırda o döngüyü atla, çökme yerine eksik kapak bırak)
+      const donguler = []; const gor = new Set();
+      for (const a0 of yonlu.keys()) {
+        if (gor.has(a0)) continue;
+        const d = [a0]; gor.add(a0); let a = yonlu.get(a0); let guard = 0; let tamam = true;
+        while (a !== a0) { if (a === undefined || ++guard > yonlu.size + 5) { tamam = false; break; } d.push(a); gor.add(a); a = yonlu.get(a); }
+        if (tamam && d.length >= 3) donguler.push(d);
+      }
+      // her döngüyü kendi düzleminde (Newell normali) kulak-kesme ile kapat
+      for (const d of donguler) {
+        const pts = d.map(i => [Vn[3 * i], Vn[3 * i + 1], Vn[3 * i + 2]]);
+        let nx = 0, ny = 0, nz = 0, cx = 0, cy = 0, cz = 0;
+        for (let i = 0; i < pts.length; i++) {
+          const p = pts[i], q = pts[(i + 1) % pts.length];
+          nx += (p[1] - q[1]) * (p[2] + q[2]); ny += (p[2] - q[2]) * (p[0] + q[0]); nz += (p[0] - q[0]) * (p[1] + q[1]);
+          cx += p[0]; cy += p[1]; cz += p[2];
+        }
+        cx /= pts.length; cy /= pts.length; cz /= pts.length;
+        let L = Math.hypot(nx, ny, nz); if (L < 1e-9) continue; nx /= L; ny /= L; nz /= L;
+        let up = Math.abs(nz) < 0.9 ? [0, 0, 1] : [0, 1, 0];
+        const dd = up[0] * nx + up[1] * ny + up[2] * nz; let v = [up[0] - nx * dd, up[1] - ny * dd, up[2] - nz * dd];
+        const vl = Math.hypot(...v) || 1; v = [v[0] / vl, v[1] / vl, v[2] / vl];
+        const u = [v[1] * nz - v[2] * ny, v[2] * nx - v[0] * nz, v[0] * ny - v[1] * nx]; // u = v×n (u×v=n olacak şekilde sağ-el)
+        const P2 = pts.map(p => { const qx = p[0] - cx, qy = p[1] - cy, qz = p[2] - cz; return [qx * u[0] + qy * u[1] + qz * u[2], qx * v[0] + qy * v[1] + qz * v[2]]; });
+        // kulakKes2D(P2) üçgenleri (ia,ib,ic) sırasıyla döner; bu sıra d-dizisinin KENDİ yönüyle aynıdır,
+        // ama kapak, sınırın komşu (A içindeki) üçgenleriyle ters yönlü kenar paylaşmalı (standart manifold kuralı):
+        // bu yüzden çıktıyı (i,k,j) olarak ters çeviriyoruz.
+        for (const [i, j, k] of kulakKes2D(P2)) Fn.push(d[i], d[k], d[j]);
+      }
+      return { V: Float64Array.from(Vn), F: Uint32Array.from(Fn) };
+    }
+    const parca = parcaCikar(t => !!inA[t]);
+    const kalan = parcaCikar(t => !inA[t]);
+    return { parca, kalan };
+  }
+
   function pimMesh(r, L, pah) {
     pah = Math.min(pah || 0.4, r * 0.4, L * 0.2); const n = 96;
     const prof = [[r - pah, 0], [r, pah], [r, L - pah], [r - pah, L]];
@@ -821,6 +905,6 @@ function parcalaMotoru() {
     return { V, F, parcalar, renk, filament };
   }
 
-  return { yukle, kes, guvenliKes, eksen, tikacKes, duzKes, kesitMerkezi, pimMesh, hacim, kapaliMi, sinirlar, stlYaz, ucmfYaz, zipYaz, delaunay, kaynakla, stlOku, tabanSekli };
+  return { yukle, kes, guvenliKes, eksen, tikacKes, duzKes, sinirAyir, kesitMerkezi, pimMesh, hacim, kapaliMi, sinirlar, stlYaz, ucmfYaz, zipYaz, delaunay, kaynakla, stlOku, tabanSekli };
 }
 if (typeof module !== 'undefined') module.exports = parcalaMotoru;

@@ -26,6 +26,12 @@ The outer shape and dimensions of the model stay exactly the same.
    - **Brush toolbar** (top bar, key `B`) edits the same selection: paint/erase brush, click-to-add regions,
      a magnetic boundary line that follows sharp edges (click points, close, click inside), and the protrusion tool.
      Auto, brush and erased areas are shown in different colors.
+   - **Paint/line separation** ("Boya/Çizgi ile Ayır", its own section below the cut list) splits two independent
+     bodies that are fused together (e.g. a figure standing on a base, or two touching props) with no connector at
+     all: paint one side one color and the other side the opposite color (or just close a boundary with the line
+     tool and skip painting entirely — the smaller side becomes the separated part), then press "ayır". Each side
+     gets a flat, closed cap instead of a plug/socket, which is the right tool for a seam that runs across most of
+     the model rather than a small local patch.
    The model is painted live with each part's color, so you can see what goes where before cutting.
    Cuts that overlap each other are flagged in red before you split.
    **Section view** (key `K`) clips the model with a plane so you can check plugs, tongues and sockets inside,

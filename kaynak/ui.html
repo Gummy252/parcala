@@ -539,7 +539,7 @@ function kesimHTML(k, i) {
       if (b.modu === 'renk' && !(D.model && D.model.renk)) g += `<div class="tam bilgi">Bu modelde boya bilgisi yok. "Kenara / derinliğe göre" seç.</div>`;
       if (b.modu === 'kenar') g += sayiAlan('ba_' + k.id, 'Hassasiyet: bu açıdan keskin kenarda dur (°)', b.aci, 3, 80, 1, 'tam');
       if (b.modu === 'ikiRenk') {
-        g += `<div class="tam bilgi">Fırça/Bölge/Çizgi ile bir tarafı <b>Ekle</b> (A), karşıt tarafı <b>Çıkar</b>/Alt+tık (B) ile boya. Boyarken hiçbir hesap yapılmaz (akıcı kalır); bitince aşağıdaki düğmeye bas: o an boyanmamış yerler en yakın tarafa otomatik dolar ve parça mevcut pim/yuva ile ayrılır. Çizgi aracıyla çizip kapattığın sınırlar, fırçanın geçemeyeceği kalıcı duvar olur (araç değiştirince kaybolmaz; <b>Enter</b>'a tekrar basarak başka bir sınır daha çizebilirsin).</div>`;
+        g += `<div class="tam bilgi">Fırça/Bölge/Çizgi ile bir tarafı <b>Ekle</b> (A), karşıt tarafı <b>Çıkar</b>/Alt+tık (B) ile boya. Boyarken hiçbir hesap yapılmaz (akıcı kalır); bitince aşağıdaki düğmeye bas: o an boyanmamış yerler en yakın tarafa otomatik dolar ve parça ${b.baglanti === 'yok' ? 'düz bir kapakla, bağlantısız' : 'mevcut pim/yuva ile'} ayrılır. Çizgi aracıyla çizip kapattığın sınırlar, fırçanın geçemeyeceği kalıcı duvar olur (araç değiştirince kaybolmaz; <b>Enter</b>'a tekrar basarak başka bir sınır daha çizebilirsin).</div>`;
         g += `<div class="tam katman"><span><i style="background:#17c3ff"></i>A (Ekle) <b class="sayi">${((b.sayiEl || 0) + (b.sayiOto || 0)).toLocaleString('tr-TR')}</b></span><span><i style="background:#e5484d"></i>B (Çıkar) <b class="sayi">${(b.sayiSil || 0).toLocaleString('tr-TR')}</b></span></div>`;
         g += secim('bl_' + k.id, 'Bağlantı', b.baglanti || 'tikac', [['tikac', 'Pim/yuva (tıkaç) — küçük, yerel yamalar için (kulak, logo, yama)'], ['yok', 'Yok — düz, bağlantısız ayır (gövdeyi ikiye bölen büyük/eğimli sınırlar için)']], true);
         g += `<div class="tam"><button type="button" class="btn ana kucuk" id="ir_${k.id}">${k.noktalar || b.baglanti === 'yok' ? 'Yeniden ayır' : 'Boyamayı bitir, iki rengi ayır'}</button></div>`;
@@ -598,7 +598,7 @@ function kesimHTML(k, i) {
   const cak = D.cakisma && D.cakisma[k.id];
   if (cak && sec) { const adlar = cak.map(id => id === 'model' ? 'ana gövde' : (D.kesimler.find(x => x.id === id) || {}).ad || id); g = `<div class="tam uyari-kutu">⚠ Bu kesim <b>${esc(adlar.join(', '))}</b> ile çakışıyor (modelde kırmızı yerler). Parçala hata verebilir: seçimi küçült ya da çakışan kesimi sil.</div>` + g; }
   return `<div class="kesim ${sec ? 'secili' : ''}" data-id="${k.id}">
-    <div class="kbas" data-sec="${k.id}" role="button" tabindex="0" aria-expanded="${sec}"><span class="no">${i + 1}</span><span class="renkn" style="background:${renkHex(k.renk)}"></span><span class="ad">${esc(k.ad)}</span>${cak ? '<span class="cak" title="Başka bir kesimle çakışıyor">⚠ çakışma</span>' : ''}<span class="tip">${k.tip === 'duz' ? 'düz kesim' : k.mod === 'kanat' ? 'kanat' : k.mod === 'bolge' ? 'akıllı seçim' : 'tıkaç'}</span></div>
+    <div class="kbas" data-sec="${k.id}" role="button" tabindex="0" aria-expanded="${sec}"><span class="no">${i + 1}</span><span class="renkn" style="background:${renkHex(k.renk)}"></span><span class="ad">${esc(k.ad)}</span>${cak ? '<span class="cak" title="Başka bir kesimle çakışıyor">⚠ çakışma</span>' : ''}<span class="tip">${k.tip === 'duz' ? 'düz kesim' : k.mod === 'kanat' ? 'kanat' : k.mod === 'bolge' ? (k.bolge.modu === 'ikiRenk' ? (k.bolge.baglanti === 'yok' ? 'boya ile ayır' : 'elle boya') : 'akıllı seçim') : 'tıkaç'}</span></div>
     ${sec ? `<div class="kgovde">${g}</div>` : ''}</div>`;
 }
 function panelCiz() {
@@ -626,9 +626,12 @@ function panelCiz() {
     }
     h += `</div>`;
     h += `<div class="bolum"><h2>Kesimler</h2>`;
-    if (!D.kesimler.length) h += `<div class="not">Ayırmak istediğin her renkli bölge için bir kesim ekle. Düz kesim: burun, taban gibi düz çizgiden ayrılan yerler. Tıkaç: cam, logo, kanat gibi gövdeye gömülü parçalar.</div>`;
+    if (!D.kesimler.length) h += `<div class="not">Ayırmak istediğin her renkli bölge için bir kesim ekle. Düz kesim: burun, taban gibi düz çizgiden ayrılan yerler. Tıkaç: cam, logo, kanat gibi gövdeye gömülü parçalar. Birbirine bitişik iki bağımsız gövdeyi (ör. astronot + roket) tamamen ayırmak için aşağıdaki "Boya/Çizgi ile Ayır" bölümünü kullan.</div>`;
     h += D.kesimler.map(kesimHTML).join('');
     h += `<div class="satir"><button type="button" class="btn" id="ekleDuz">+ Düz kesim</button><button type="button" class="btn" id="ekleTikac">+ Tıkaç (cam, rozet)</button><button type="button" class="btn" id="ekleKanat">+ Kanat (4 tık)</button><button type="button" class="btn" id="ekleBolge">+ Akıllı seçim (renk / kenar)</button></div></div>`;
+    h += `<div class="bolum"><h2>Boya/Çizgi ile Ayır</h2>
+      <div class="not">Astronot + roket + bulut gibi birbirine bitişik, <b>bağımsız</b> iki gövdeyi (klik/pim gerekmeyen, zaten yapıştırılacak veya ayrı basılacak parçaları) tamamen birbirinden ayırır. Fırça/Çizgi ile bir tarafı bir renk, öbür tarafı zıt renk yap (ya da sadece Çizgi ile bir sınır çiz) — düz, <b>bağlantısız</b> bir kapakla ikiye böler. Küçük yerel yamalar (cam, logo, kulak) için bunun yerine "Tıkaç" ya da "Akıllı seçim" kullan.</div>
+      <div class="satir"><button type="button" class="btn ana" id="ekleSinirAyir">+ Boya ile Ayır (bağlantısız)</button></div></div>`;
     h += `<details class="bolum"><summary>Toleranslar (parçalar sıkı/gevşek gelirse)</summary><div class="izgara">
       ${sayiAlan('t_yan', 'Yan boşluk', D.ayar.boslukYan, 0, 0.6, 0.01)}${sayiAlan('t_der', 'Dip boşluk', D.ayar.boslukDerinlik, 0, 0.6, 0.01)}${sayiAlan('t_pim', 'Pim boşluğu', D.ayar.boslukPim, 0, 0.6, 0.01)}</div></details>`;
     if (D.hata) h += `<div class="hata" role="alert">${esc(D.hata)}</div>`;
@@ -686,6 +689,7 @@ function baglaPanel() {
   if (e('ekleTikac')) e('ekleTikac').onclick = () => { const k = yeniKesim('tikac'); D.kesimler.push(k); D.secili = k.id; panelCiz(); onizleme(); };
   if (e('ekleKanat')) e('ekleKanat').onclick = () => { const k = yeniKesim('tikac'); Object.assign(k, { mod: 'kanat', ad: yeniAd('Kanat'), kanat: { tik: [] }, sekil: 'dikdortgen', derinlik: 2.5, duvar: 12, icPay: 0.2, anahtar: false }); D.kesimler.push(k); D.secili = k.id; panelCiz(); onizleme(); };
   if (e('ekleBolge')) e('ekleBolge').onclick = () => { const k = yeniKesim('tikac'); Object.assign(k, { mod: 'bolge', ad: yeniAd('Bölge'), bolge: { modu: D.model && D.model.renk ? 'renk' : 'kenar', aci: 30, ek: 1.5, tohum: null, secim: null }, sekil: 'cokgen', duvar: 30, icPay: 0.05, anahtar: false }); D.kesimler.push(k); D.secili = k.id; panelCiz(); onizleme(); };
+  if (e('ekleSinirAyir')) e('ekleSinirAyir').onclick = () => { const k = yeniKesim('tikac'); Object.assign(k, { mod: 'bolge', ad: yeniAd('Ayrım'), bolge: { modu: 'ikiRenk', baglanti: 'yok', aci: 30, ek: 1.5, tohum: null, secim: null }, sekil: 'cokgen', duvar: 30, icPay: 0.05, anahtar: false }); D.kesimler.push(k); D.secili = k.id; panelCiz(); onizleme(); };
   if (e('calistir')) e('calistir').onclick = calistir;
   if (e('indir')) e('indir').onclick = indir;
   if (e('geri')) e('geri').onclick = () => { D.mod = 'duzen'; D.hata = null; panelCiz(); modelCiz(); onizleme(); };

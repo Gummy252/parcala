@@ -975,21 +975,31 @@ function parcalaMotoru() {
   function kulakKes2D(P) {
     const n = P.length; if (n < 3) return [];
     const idx = []; for (let i = 0; i < n; i++) idx.push(i);
+    // gerçek (elle boyanmış/çizilmiş) sınırlar, temiz sentetik çokgenlerden farklı olarak çok sayıda neredeyse
+    // çakışık/doğrusal nokta içerebilir (yoğun üçgenleme, hafif düzlemsel-olmayan izdüşüm gürültüsü). Sabit, çok
+    // küçük bir eşik (1e-9) bu gürültüyle kolayca yanlış "içbükey" kararına yol açıp kulak bulmayı tamamen
+    // durdurabiliyordu (gözlemlenen hata: kapakta gerçek delik + bir köşeden saçılan ince "güneş ışını" üçgenler).
+    // Bunun yerine çokgenin kendi ölçeğine göre göreli bir eşik kullanıyoruz.
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (const p of P) { if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0]; if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1]; }
+    const olcek = Math.max(x1 - x0, y1 - y0, 1e-6); const eps = 1e-7 * olcek * olcek;
     const alan2 = (a, b, c) => (P[b][0] - P[a][0]) * (P[c][1] - P[a][1]) - (P[b][1] - P[a][1]) * (P[c][0] - P[a][0]);
-    const icinde = (a, b, c, p) => { const d1 = alan2(a, b, p), d2 = alan2(b, c, p), d3 = alan2(c, a, p); return d1 >= -1e-9 && d2 >= -1e-9 && d3 >= -1e-9; };
+    const icinde = (a, b, c, p) => { const d1 = alan2(a, b, p), d2 = alan2(b, c, p), d3 = alan2(c, a, p); return d1 >= -eps && d2 >= -eps && d3 >= -eps; };
     const ucgenler = []; let guard = 0;
     while (idx.length > 3 && guard++ < idx.length * idx.length + 64) {
       let kesildi = false;
       for (let i = 0; i < idx.length; i++) {
         const ia = idx[(i - 1 + idx.length) % idx.length], ib = idx[i], ic = idx[(i + 1) % idx.length];
-        if (alan2(ia, ib, ic) <= 1e-9) continue; // dışbükey değil: kulak olamaz
+        if (alan2(ia, ib, ic) <= eps) continue; // dışbükey değil: kulak olamaz
         let kulak = true;
         for (const p of idx) { if (p === ia || p === ib || p === ic) continue; if (icinde(ia, ib, ic, p)) { kulak = false; break; } }
         if (kulak) { ucgenler.push([ia, ib, ic]); idx.splice(i, 1); kesildi = true; break; }
       }
-      if (!kesildi) break; // bozuk/kendiyle kesişen sınır: olabildiğince kapat, gerisini açık bırak
+      if (!kesildi) break; // bozuk/çok ince dilimli sınır: kulak bulunamadı, aşağıda yelpazeyle GARANTİ kapat
     }
-    if (idx.length === 3) ucgenler.push([idx[0], idx[1], idx[2]]);
+    // ne olursa olsun kapağı TAMAMEN kapat: kulak-kesme bazı noktalarda tıkanırsa (ince/uzun şekil, gürültülü
+    // sınır), kalanı tek bir köşeden yelpaze ile üçgenle. Görsel olarak ideal olmayabilir ama asla delik bırakmaz.
+    for (let i = 1; i + 1 < idx.length; i++) ucgenler.push([idx[0], idx[i], idx[i + 1]]);
     return ucgenler;
   }
 

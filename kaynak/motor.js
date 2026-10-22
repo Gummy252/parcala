@@ -826,86 +826,98 @@ function parcalaMotoru() {
     }
     const komsu = (a, b) => { const id = kenarSahibi.get(b * nV + a); return id === undefined ? -1 : id; };
 
+    // 1) A tarafının sınır kenarlarını (yönlü, ORİJİNAL/global köşe id'leriyle) TEK SEFER çıkar.
+    // B tarafının sınır kenarları bunun tam tersidir (aynı kenar, ters yön) — iki ayrı taramaya gerek yok;
+    // bu da iki tarafın kapaklarının birbirinin aynası olmasını (tutarlı dönüş toplamı, çakışmasız) garanti eder.
+    const kenarA = [], kenarB = [];
+    for (let t = 0; t < nF; t++) if (inA[t]) {
+      const vs = [F[3 * t], F[3 * t + 1], F[3 * t + 2]];
+      for (let k = 0; k < 3; k++) {
+        const a = vs[k], b = vs[(k + 1) % 3]; const kt = komsu(a, b); if (kt < 0 || !inA[kt]) { kenarA.push(a); kenarB.push(b); }
+      }
+    }
+    // Gerçek (fırçayla boyanmış, yoğun/detaylı yüzeyde) sınırlar her zaman BASİT bir döngü olmayabilir:
+    // bir köşeden birden fazla sınır kenarı çıkabilir (dallanma/kendine değme). Eski kod bunu "bozuk" sayıp
+    // o zincirin TAMAMINI atıyordu — binlerce kenarın kapaksız kalmasına (büyük delik) yol açan buydu.
+    // Artık her sınır kenarı ayrı bir "kullanılabilir" giriş olarak tutuluyor ve döngüler bunlardan,
+    // HİÇBİR KENAR ATLANMADAN kuruluyor (dallanma noktasında hangi kenarın seçildiği önemsiz, önemli olan
+    // hiçbir kenarın kapaksız kalmaması).
+    const cikisListesi = new Map();
+    for (let i = 0; i < kenarA.length; i++) { let l = cikisListesi.get(kenarA[i]); if (!l) cikisListesi.set(kenarA[i], l = []); l.push(i); }
+    // dallanma noktasında (bir köşeden birden fazla kullanılabilir çıkış kenarı varsa) rastgele değil,
+    // GELEN yönle en "düz devam eden" (dönüş açısı en küçük) kenarı seçiyoruz: bu, dokunan/iç içe geçen
+    // sınır halkalarını kendi aralarında ayırmanın doğal yolu ve kapakta küçük çakışma/örtüşmeleri önler.
+    const kullanildi = new Uint8Array(kenarA.length);
+    const donguler = [];
+    for (let e0 = 0; e0 < kenarA.length; e0++) {
+      if (kullanildi[e0]) continue;
+      kullanildi[e0] = 1; const bas = kenarA[e0]; const d = [bas]; let v = kenarB[e0]; let guard = 0;
+      let geliyor = [V[3 * v] - V[3 * bas], V[3 * v + 1] - V[3 * bas + 1], V[3 * v + 2] - V[3 * bas + 2]];
+      while (v !== bas && guard++ < kenarA.length + 5) {
+        d.push(v);
+        const l = cikisListesi.get(v); let idx = -1;
+        if (l) {
+          const musaitler = l.filter(c => !kullanildi[c]);
+          if (musaitler.length === 1) idx = musaitler[0];
+          else if (musaitler.length > 1) {
+            const gl = Math.hypot(...geliyor) || 1; let enIyi = -Infinity;
+            for (const c of musaitler) {
+              const w = kenarB[c]; const yon = [V[3 * w] - V[3 * v], V[3 * w + 1] - V[3 * v + 1], V[3 * w + 2] - V[3 * v + 2]];
+              const yl = Math.hypot(...yon) || 1; const dk = (geliyor[0] * yon[0] + geliyor[1] * yon[1] + geliyor[2] * yon[2]) / (gl * yl);
+              if (dk > enIyi) { enIyi = dk; idx = c; }
+            }
+          }
+        }
+        if (idx < 0) break;                    // bu köşeden kullanılabilir kenar kalmadı: zinciri burada bitir
+        kullanildi[idx] = 1;
+        geliyor = [V[3 * kenarB[idx]] - V[3 * v], V[3 * kenarB[idx] + 1] - V[3 * v + 1], V[3 * kenarB[idx] + 2] - V[3 * v + 2]];
+        v = kenarB[idx];
+      }
+      if (v === bas && d.length >= 3) donguler.push(d);
+      // kapanmadıysa (teorik olarak olmamalı, 2-manifold seçim sınırı hep kapalı döngülerden oluşur) bu
+      // parçayı atlıyoruz; ama artık dallanma TEK BAŞINA bu dallanmaya hiç yol açmıyor, önceki kod gibi
+      // binlerce kenarı peşinen kaybetmiyoruz.
+    }
+    // 2) her döngüyü kendi düzleminde (Newell normali) kulak-kesme ile BİR KEZ kapat (global köşe id'leriyle).
+    // Bu üçgenleşme hem A'ya hem B'ye, SADECE ZIT YÖNDE eklenecek — böylece iki kapak geometrik olarak
+    // birbirinin tam aynası olur (aynı noktalar, ters sarım), tutarsız/çakışan kapaklar oluşmaz.
+    const kapaklar = [];
+    for (const d of donguler) {
+      const pts = d.map(i => [V[3 * i], V[3 * i + 1], V[3 * i + 2]]);
+      let nx = 0, ny = 0, nz = 0, cx = 0, cy = 0, cz = 0;
+      for (let i = 0; i < pts.length; i++) {
+        const p = pts[i], q = pts[(i + 1) % pts.length];
+        nx += (p[1] - q[1]) * (p[2] + q[2]); ny += (p[2] - q[2]) * (p[0] + q[0]); nz += (p[0] - q[0]) * (p[1] + q[1]);
+        cx += p[0]; cy += p[1]; cz += p[2];
+      }
+      cx /= pts.length; cy /= pts.length; cz /= pts.length;
+      let L = Math.hypot(nx, ny, nz); if (L < 1e-9) continue; nx /= L; ny /= L; nz /= L;
+      let up = Math.abs(nz) < 0.9 ? [0, 0, 1] : [0, 1, 0];
+      const dd = up[0] * nx + up[1] * ny + up[2] * nz; let v = [up[0] - nx * dd, up[1] - ny * dd, up[2] - nz * dd];
+      const vl = Math.hypot(...v) || 1; v = [v[0] / vl, v[1] / vl, v[2] / vl];
+      const u = [v[1] * nz - v[2] * ny, v[2] * nx - v[0] * nz, v[0] * ny - v[1] * nx]; // u = v×n (u×v=n olacak şekilde sağ-el)
+      const P2 = pts.map(p => { const qx = p[0] - cx, qy = p[1] - cy, qz = p[2] - cz; return [qx * u[0] + qy * u[1] + qz * u[2], qx * v[0] + qy * v[1] + qz * v[2]]; });
+      kapaklar.push({ d, ears: kulakKes2D(P2) });
+    }
+
     function parcaCikar(sec) {
       const yeniIdx = new Int32Array(nV).fill(-1); const Vn = []; let nvn = 0; const Fn = [];
       const yerelV = i => { if (yeniIdx[i] < 0) { yeniIdx[i] = nvn++; Vn.push(V[3 * i], V[3 * i + 1], V[3 * i + 2]); } return yeniIdx[i]; };
       for (let t = 0; t < nF; t++) if (sec(t)) { const a = F[3 * t], b = F[3 * t + 1], c = F[3 * t + 2]; Fn.push(yerelV(a), yerelV(b), yerelV(c)); }
-      // sınır kenarları (bu parçaya özel): komşusu bu parçada olmayan kenarlar, yönü korunur.
-      // Gerçek (fırçayla boyanmış, yoğun/detaylı yüzeyde) sınırlar her zaman BASİT bir döngü olmayabilir:
-      // bir köşeden birden fazla sınır kenarı çıkabilir (dallanma/kendine değme). Eski kod bunu "bozuk" sayıp
-      // o zincirin TAMAMINI atıyordu — binlerce kenarın kapaksız kalmasına (büyük delik) yol açan buydu.
-      // Artık her sınır kenarı ayrı bir "kullanılabilir" giriş olarak tutuluyor ve döngüler bunlardan,
-      // HİÇBİR KENAR ATLANMADAN kuruluyor (dallanma noktasında hangi kenarın seçildiği önemsiz, önemli olan
-      // hiçbir kenarın kapaksız kalmaması).
-      const kenarA = [], kenarB = []; const cikisListesi = new Map();
-      for (let t = 0; t < nF; t++) if (sec(t)) {
-        const vs = [F[3 * t], F[3 * t + 1], F[3 * t + 2]];
-        for (let k = 0; k < 3; k++) {
-          const a = vs[k], b = vs[(k + 1) % 3]; const kt = komsu(a, b); if (kt < 0 || !sec(kt)) {
-            const la = yerelV(a), lb = yerelV(b); const idx = kenarA.length; kenarA.push(la); kenarB.push(lb);
-            let l = cikisListesi.get(la); if (!l) cikisListesi.set(la, l = []); l.push(idx);
-          }
-        }
-      }
-      // dallanma noktasında (bir köşeden birden fazla kullanılabilir çıkış kenarı varsa) rastgele değil,
-      // GELEN yönle en "düz devam eden" (dönüş açısı en küçük) kenarı seçiyoruz: bu, dokunan/iç içe geçen
-      // sınır halkalarını kendi aralarında ayırmanın doğal yolu ve kapakta küçük çakışma/örtüşmeleri önler.
-      const kullanildi = new Uint8Array(kenarA.length);
-      const donguler = [];
-      for (let e0 = 0; e0 < kenarA.length; e0++) {
-        if (kullanildi[e0]) continue;
-        kullanildi[e0] = 1; const bas = kenarA[e0]; const d = [bas]; let v = kenarB[e0]; let guard = 0;
-        let geliyor = [Vn[3 * v] - Vn[3 * bas], Vn[3 * v + 1] - Vn[3 * bas + 1], Vn[3 * v + 2] - Vn[3 * bas + 2]];
-        while (v !== bas && guard++ < kenarA.length + 5) {
-          d.push(v);
-          const l = cikisListesi.get(v); let idx = -1;
-          if (l) {
-            const musaitler = l.filter(c => !kullanildi[c]);
-            if (musaitler.length === 1) idx = musaitler[0];
-            else if (musaitler.length > 1) {
-              const gl = Math.hypot(...geliyor) || 1; let enIyi = -Infinity;
-              for (const c of musaitler) {
-                const w = kenarB[c]; const yon = [Vn[3 * w] - Vn[3 * v], Vn[3 * w + 1] - Vn[3 * v + 1], Vn[3 * w + 2] - Vn[3 * v + 2]];
-                const yl = Math.hypot(...yon) || 1; const dk = (geliyor[0] * yon[0] + geliyor[1] * yon[1] + geliyor[2] * yon[2]) / (gl * yl);
-                if (dk > enIyi) { enIyi = dk; idx = c; }
-              }
-            }
-          }
-          if (idx < 0) break;                    // bu köşeden kullanılabilir kenar kalmadı: zinciri burada bitir
-          kullanildi[idx] = 1;
-          geliyor = [Vn[3 * kenarB[idx]] - Vn[3 * v], Vn[3 * kenarB[idx] + 1] - Vn[3 * v + 1], Vn[3 * kenarB[idx] + 2] - Vn[3 * v + 2]];
-          v = kenarB[idx];
-        }
-        if (v === bas && d.length >= 3) donguler.push(d);
-        // kapanmadıysa (teorik olarak olmamalı, 2-manifold seçim sınırı hep kapalı döngülerden oluşur) bu
-        // parçayı atlıyoruz; ama artık dallanma TEK BAŞINA bu dallanmaya hiç yol açmıyor, önceki kod gibi
-        // binlerce kenarı peşinen kaybetmiyoruz.
-      }
-      // her döngüyü kendi düzleminde (Newell normali) kulak-kesme ile kapat
-      for (const d of donguler) {
-        const pts = d.map(i => [Vn[3 * i], Vn[3 * i + 1], Vn[3 * i + 2]]);
-        let nx = 0, ny = 0, nz = 0, cx = 0, cy = 0, cz = 0;
-        for (let i = 0; i < pts.length; i++) {
-          const p = pts[i], q = pts[(i + 1) % pts.length];
-          nx += (p[1] - q[1]) * (p[2] + q[2]); ny += (p[2] - q[2]) * (p[0] + q[0]); nz += (p[0] - q[0]) * (p[1] + q[1]);
-          cx += p[0]; cy += p[1]; cz += p[2];
-        }
-        cx /= pts.length; cy /= pts.length; cz /= pts.length;
-        let L = Math.hypot(nx, ny, nz); if (L < 1e-9) continue; nx /= L; ny /= L; nz /= L;
-        let up = Math.abs(nz) < 0.9 ? [0, 0, 1] : [0, 1, 0];
-        const dd = up[0] * nx + up[1] * ny + up[2] * nz; let v = [up[0] - nx * dd, up[1] - ny * dd, up[2] - nz * dd];
-        const vl = Math.hypot(...v) || 1; v = [v[0] / vl, v[1] / vl, v[2] / vl];
-        const u = [v[1] * nz - v[2] * ny, v[2] * nx - v[0] * nz, v[0] * ny - v[1] * nx]; // u = v×n (u×v=n olacak şekilde sağ-el)
-        const P2 = pts.map(p => { const qx = p[0] - cx, qy = p[1] - cy, qz = p[2] - cz; return [qx * u[0] + qy * u[1] + qz * u[2], qx * v[0] + qy * v[1] + qz * v[2]]; });
-        // kulakKes2D(P2) üçgenleri (ia,ib,ic) sırasıyla döner; bu sıra d-dizisinin KENDİ yönüyle aynıdır,
-        // ama kapak, sınırın komşu (A içindeki) üçgenleriyle ters yönlü kenar paylaşmalı (standart manifold kuralı):
-        // bu yüzden çıktıyı (i,k,j) olarak ters çeviriyoruz.
-        for (const [i, j, k] of kulakKes2D(P2)) Fn.push(d[i], d[k], d[j]);
-      }
-      return { V: Float64Array.from(Vn), F: Uint32Array.from(Fn) };
+      return { Vn, Fn, yerelV };
     }
-    const parca = parcaCikar(t => !!inA[t]);
-    const kalan = parcaCikar(t => !inA[t]);
+    const A = parcaCikar(t => !!inA[t]);
+    const B = parcaCikar(t => !inA[t]);
+    // kapakları her iki parçaya da ZIT yönlerde ekle: A için (i,k,j) [sınırın kendi A-yönüne göre ters, standart
+    // manifold kuralı], B için ise bunun tam tersi, yani (i,j,k) — aynı 3 nokta, ters sarım.
+    for (const { d, ears } of kapaklar) {
+      for (const [i, j, k] of ears) {
+        A.Fn.push(A.yerelV(d[i]), A.yerelV(d[k]), A.yerelV(d[j]));
+        B.Fn.push(B.yerelV(d[i]), B.yerelV(d[j]), B.yerelV(d[k]));
+      }
+    }
+    const parca = { V: Float64Array.from(A.Vn), F: Uint32Array.from(A.Fn) };
+    const kalan = { V: Float64Array.from(B.Vn), F: Uint32Array.from(B.Fn) };
     return { parca, kalan };
   }
 

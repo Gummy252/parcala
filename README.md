@@ -44,6 +44,10 @@ The outer shape and dimensions of the model stay exactly the same.
 Clearances (side, bottom, pin) are adjustable if parts come out too tight or too loose.
 Everything runs locally; models are never uploaded anywhere.
 
+Dark theme by default (toggle in the top-right of the header, remembered between launches).
+Cut types (flat cut, plug, wing, smart selection, paint/line separation) are all added from one
+"+ Kesim ekle" menu above the cut list, instead of being scattered across several buttons/sections.
+
 ## Development
 
 - App source: `kaynak/ui.html` (interface) and `kaynak/motor.js` (cutting engine, no dependencies).

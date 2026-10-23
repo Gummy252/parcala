@@ -1,7 +1,7 @@
 {
   "name": "parcala",
   "productName": "Parçala",
-  "version": "0.9.9",
+  "version": "0.10.0",
   "description": "Splits 3D models into single-color parts with connectors for multi-color printing without an AMS",
   "author": "Gummy252",
   "license": "UNLICENSED",

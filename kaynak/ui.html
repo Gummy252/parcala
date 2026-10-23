@@ -7,20 +7,20 @@
 :root{
   --bg:#eef0ec; --panel:#fbfbf9; --fg:#1b2122; --muted:#5d6869; --line:#d6dbd5; --soft:#e5e9e3;
   --accent:#0d7a6a; --accent-fg:#ffffff; --cut:#e0571d; --warn:#b54708; --ok:#1c7c45;
-  --stage:#e3e7e1; --grid:#c9cfc8;
+  --stage:#e3e7e1; --grid:#c9cfc8; --sh:0 6px 20px rgba(20,30,28,.08);
   --f-display:"Archivo", "Segoe UI", system-ui, sans-serif;
   --f-body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
   --f-mono:"IBM Plex Mono", ui-monospace, Consolas, monospace;
-  --r:8px;
+  --r-sm:6px; --r:10px; --r-lg:14px;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#121617; --panel:#191e1f; --fg:#e4eae9; --muted:#97a3a2; --line:#2b3334; --soft:#212829;
-  --accent:#36bfa9; --accent-fg:#06211c; --cut:#ff7a3d; --warn:#f0a35e; --ok:#55c98a;
-  --stage:#1b2122; --grid:#2a3233; color-scheme:dark }}
+  --bg:#0f1316; --panel:#161b1e; --fg:#e7ecea; --muted:#8a9897; --line:#283033; --soft:#1d2427;
+  --accent:#2bd1b4; --accent-fg:#06211c; --cut:#ff8a52; --warn:#f0a35e; --ok:#55c98a;
+  --stage:#121719; --grid:#262f31; --sh:0 10px 28px rgba(0,0,0,.35); color-scheme:dark }}
 :root[data-theme="dark"]{
-  --bg:#121617; --panel:#191e1f; --fg:#e4eae9; --muted:#97a3a2; --line:#2b3334; --soft:#212829;
-  --accent:#36bfa9; --accent-fg:#06211c; --cut:#ff7a3d; --warn:#f0a35e; --ok:#55c98a;
-  --stage:#1b2122; --grid:#2a3233; color-scheme:dark }
+  --bg:#0f1316; --panel:#161b1e; --fg:#e7ecea; --muted:#8a9897; --line:#283033; --soft:#1d2427;
+  --accent:#2bd1b4; --accent-fg:#06211c; --cut:#ff8a52; --warn:#f0a35e; --ok:#55c98a;
+  --stage:#121719; --grid:#262f31; --sh:0 10px 28px rgba(0,0,0,.35); color-scheme:dark }
 html,body{height:100%}
 body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:14px;margin:0;overflow:hidden}
 button,input,select{font:inherit;color:inherit}
@@ -32,13 +32,16 @@ header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding-block:10p
 .logo i b{border-radius:2px}
 .logo i b:nth-child(1){background:var(--accent)} .logo i b:nth-child(2){background:var(--cut)} .logo i b:nth-child(3){background:var(--muted)} .logo i b:nth-child(4){background:var(--fg)}
 .dosyaad{color:var(--muted);font-family:var(--f-mono);font-size:12px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
-.btn{border:1px solid var(--line);background:var(--panel);border-radius:var(--r);padding:7px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
-.btn:hover{border-color:var(--muted)}
+.btn{border:1px solid var(--line);background:var(--panel);border-radius:var(--r);padding:7px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;transition:border-color .12s,background-color .12s,filter .12s}
+.btn:hover{border-color:var(--muted);background:var(--soft)}
 .btn:focus-visible,.alan:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .btn.ana{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);font-weight:600}
-.btn.ana:hover{filter:brightness(1.07)}
+.btn.ana:hover{filter:brightness(1.07);background:var(--accent)}
 .btn.kucuk{padding:4px 9px;font-size:12.5px}
+.btn.simge{padding:7px;width:34px;justify-content:center}
+.btn.simge svg{width:17px;height:17px}
 .btn:disabled{opacity:.5;cursor:not-allowed}
+.btn:disabled:hover{background:var(--panel);border-color:var(--line)}
 .govde{display:grid;grid-template-columns:minmax(0,1fr) 380px;min-height:0}
 .sahne{position:relative;min-width:0;min-height:0;background:var(--stage)}
 canvas#gl{width:100%;height:100%;display:block;touch-action:none;cursor:grab}
@@ -76,21 +79,24 @@ canvas#gl.firca{cursor:none}
 .ilerleme .cubuk{height:6px;border-radius:3px;background:var(--soft);overflow:hidden;margin-top:10px}
 .ilerleme .cubuk i{display:block;height:100%;background:var(--accent);width:0;transition:width .2s}
 .ilerleme .yazi{color:var(--muted);font-size:12.5px;min-height:1.3em}
-aside{border-left:1px solid var(--line);background:var(--panel);overflow-y:auto;min-height:0;padding-block:14px;padding-left:16px;padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:16px}
-h2{font-family:var(--f-display);font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0;font-weight:700}
-.bolum{display:flex;flex-direction:column;gap:8px}
-.bilgi{font-size:13px;color:var(--muted);line-height:1.45}
+aside{border-left:1px solid var(--line);background:var(--panel);overflow-y:auto;min-height:0;padding-block:14px;padding-left:16px;padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:18px}
+aside>*+*{border-top:1px solid var(--line);padding-top:18px}
+h2{font-family:var(--f-display);font-size:12.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:0 0 2px;font-weight:700;display:flex;align-items:center;gap:8px}
+.bolum{display:flex;flex-direction:column;gap:10px}
+.bilgi{font-size:13px;color:var(--muted);line-height:1.5}
 .uyari-kutu{font-size:12.5px;line-height:1.45;padding:8px 10px;border-radius:var(--r);background:color-mix(in srgb,#e5484d 12%,transparent);border:1px solid color-mix(in srgb,#e5484d 45%,transparent)}
 .kbas .cak{color:#e5484d;font-size:11.5px;font-weight:600;margin-left:6px}
 .bilgi .sayi{font-family:var(--f-mono);color:var(--fg);font-variant-numeric:tabular-nums}
-.not{font-size:12.5px;border-left:3px solid var(--accent);padding:6px 10px;background:var(--soft);border-radius:0 6px 6px 0;line-height:1.45}
+.not{font-size:12.5px;border-left:3px solid var(--accent);padding:7px 10px;background:var(--soft);border-radius:0 6px 6px 0;line-height:1.5}
 .not.uyari{border-color:var(--warn)}
-.kesim{border:1px solid var(--line);border-radius:var(--r);background:var(--panel)}
+.kesim{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);transition:border-color .12s,box-shadow .12s}
+.kesim:hover{border-color:color-mix(in srgb,var(--muted) 60%,var(--line))}
 .kesim.secili{border-color:var(--cut);box-shadow:0 0 0 1px var(--cut)}
-.kbas{display:flex;align-items:center;gap:8px;padding:8px 10px;cursor:pointer}
+.kesim+.kesim{margin-top:8px}
+.kbas{display:flex;align-items:center;gap:9px;padding:9px 11px;cursor:pointer;border-radius:var(--r)}
 .kbas .no{font-family:var(--f-mono);font-size:11px;color:var(--muted);width:18px}
 .kbas .ad{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.kbas .tip{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.kbas .tip{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;background:var(--soft);padding:2px 7px;border-radius:999px}
 .renkn{width:14px;height:14px;border-radius:4px;border:1px solid rgba(0,0,0,.2);flex:none}
 .kgovde{border-top:1px solid var(--line);padding:10px;display:grid;grid-template-columns:1fr 1fr;gap:10px 10px}
 .kgovde .tam{grid-column:1/-1}
@@ -104,6 +110,17 @@ input.alan[type=number]{font-family:var(--f-mono);font-variant-numeric:tabular-n
 .renkler button{width:20px;height:20px;border-radius:5px;border:1px solid rgba(0,0,0,.18);cursor:pointer;padding:0}
 .renkler button[aria-pressed=true]{outline:2px solid var(--fg);outline-offset:1px}
 .satir{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.ekle-menu{position:relative}
+.ekle-menu>summary{list-style:none;cursor:pointer}
+.ekle-menu>summary::-webkit-details-marker{display:none}
+.ekle-menu .liste{position:absolute;z-index:5;top:calc(100% + 6px);left:0;min-width:280px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--sh);padding:6px;display:flex;flex-direction:column;gap:2px}
+.ekle-menu[open]>summary{border-color:var(--muted)}
+.ekle-secenek{display:flex;align-items:flex-start;gap:10px;text-align:left;border:0;background:transparent;border-radius:var(--r-sm);padding:9px 10px;cursor:pointer;width:100%;box-sizing:border-box}
+.ekle-secenek:hover,.ekle-secenek:focus-visible{background:var(--soft);outline:none}
+.ekle-secenek i{width:9px;height:9px;border-radius:50%;flex:none;margin-top:5px}
+.ekle-secenek .ic{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ekle-secenek .ic b{font-size:13px;font-weight:600}
+.ekle-secenek .ic span{font-size:12px;color:var(--muted);line-height:1.4}
 .parca{display:grid;grid-template-columns:auto 1fr auto;gap:4px 10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r)}
 .parca .hac{font-family:var(--f-mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 .parca .durum{grid-column:2/-1;font-size:12px;color:var(--muted)}
@@ -147,6 +164,10 @@ kbd{font-family:var(--f-mono);font-size:11px;border:1px solid var(--line);border
     <input type="file" id="dosya" accept=".stl,.3mf" hidden>
     <button class="btn" id="fircaBtn" type="button" aria-pressed="false" title="Fırça: seçimi elle boya / sil (B)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18.4 2.6a2 2 0 0 1 2.9 2.9L12 14.8 9.2 12z"/><path d="M8.5 13.2c-2 0-3.5 1.6-3.5 3.5 0 1.4-1 2.3-2.5 2.6 1.2 1.3 3 1.9 4.8 1.9 2.8 0 4.7-2 4.7-4.5z"/></svg>Fırça</button>
     <button class="btn" id="acBtn" type="button">Model aç (.stl / .3mf)</button>
+    <button class="btn simge" id="temaBtn" type="button" title="Açık/koyu tema">
+      <svg id="temaAy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.3a8.5 8.5 0 1 1-10.8-10.8 8.5 8.5 0 0 0 10.8 10.8z"/></svg>
+      <svg id="temaGun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.4M12 19.1v2.4M4.9 4.9l1.7 1.7M17.4 17.4l1.7 1.7M2.5 12h2.4M19.1 12h2.4M4.9 19.1l1.7-1.7M17.4 6.6l1.7-1.7"/></svg>
+    </button>
   </header>
   <div class="govde">
     <div class="sahne" id="sahne">
@@ -539,7 +560,8 @@ function kesimHTML(k, i) {
       if (b.modu === 'renk' && !(D.model && D.model.renk)) g += `<div class="tam bilgi">Bu modelde boya bilgisi yok. "Kenara / derinliğe göre" seç.</div>`;
       if (b.modu === 'kenar') g += sayiAlan('ba_' + k.id, 'Hassasiyet: bu açıdan keskin kenarda dur (°)', b.aci, 3, 80, 1, 'tam');
       if (b.modu === 'ikiRenk') {
-        g += `<div class="tam bilgi">Fırça/Bölge/Çizgi ile bir tarafı <b>Ekle</b> (A), karşıt tarafı <b>Çıkar</b>/Alt+tık (B) ile boya. Boyarken hiçbir hesap yapılmaz (akıcı kalır); bitince aşağıdaki düğmeye bas: o an boyanmamış yerler en yakın tarafa otomatik dolar ve parça ${b.baglanti === 'yok' ? 'düz bir kapakla, bağlantısız' : 'mevcut pim/yuva ile'} ayrılır. Çizgi aracıyla çizip kapattığın sınırlar, fırçanın geçemeyeceği kalıcı duvar olur (araç değiştirince kaybolmaz; <b>Enter</b>'a tekrar basarak başka bir sınır daha çizebilirsin).</div>`;
+        g += `<div class="tam bilgi">Fırça/Bölge/Çizgi ile bir tarafı <b>Ekle</b> (A), karşıtını <b>Çıkar</b>/Alt+tık (B) ile boya; sonra aşağıdaki düğmeye bas.</div>`;
+        g += `<details class="tam"><summary>Nasıl çalışır?</summary><div class="bilgi">Boyarken hiçbir hesap yapılmaz (akıcı kalır); düğmeye basınca o an boyanmamış yerler en yakın tarafa otomatik dolar ve parça ${b.baglanti === 'yok' ? 'düz bir kapakla, bağlantısız' : 'mevcut pim/yuva ile'} ayrılır. Çizgi aracıyla çizip kapattığın sınırlar, fırçanın geçemeyeceği kalıcı duvar olur (araç değiştirince kaybolmaz; <b>Enter</b>'a tekrar basarak başka bir sınır daha çizebilirsin).</div></details>`;
         g += `<div class="tam katman"><span><i style="background:#17c3ff"></i>A (Ekle) <b class="sayi">${((b.sayiEl || 0) + (b.sayiOto || 0)).toLocaleString('tr-TR')}</b></span><span><i style="background:#e5484d"></i>B (Çıkar) <b class="sayi">${(b.sayiSil || 0).toLocaleString('tr-TR')}</b></span></div>`;
         g += secim('bl_' + k.id, 'Bağlantı', b.baglanti || 'tikac', [['tikac', 'Pim/yuva (tıkaç) — küçük, yerel yamalar için (kulak, logo, yama)'], ['yok', 'Yok — düz, bağlantısız ayır (gövdeyi ikiye bölen büyük/eğimli sınırlar için)']], true);
         g += `<div class="tam"><button type="button" class="btn ana kucuk" id="ir_${k.id}">${k.noktalar || b.baglanti === 'yok' ? 'Yeniden ayır' : 'Boyamayı bitir, iki rengi ayır'}</button></div>`;
@@ -625,13 +647,16 @@ function panelCiz() {
       h += `<label class="al">Ana gövde rengi</label>${renkSecici(D.anaRenk, 'data-ana="1"')}`;
     }
     h += `</div>`;
-    h += `<div class="bolum"><h2>Kesimler</h2>`;
-    if (!D.kesimler.length) h += `<div class="not">Ayırmak istediğin her renkli bölge için bir kesim ekle. Düz kesim: burun, taban gibi düz çizgiden ayrılan yerler. Tıkaç: cam, logo, kanat gibi gövdeye gömülü parçalar. Birbirine bitişik iki bağımsız gövdeyi (ör. astronot + roket) tamamen ayırmak için aşağıdaki "Boya/Çizgi ile Ayır" bölümünü kullan.</div>`;
+    h += `<div class="bolum"><h2>Kesimler${D.kesimler.length ? ` <span class="bilgi" style="font-family:var(--f-mono);font-size:11px;text-transform:none;letter-spacing:0">${D.kesimler.length}</span>` : ''}</h2>`;
+    if (!D.kesimler.length) h += `<div class="not">Ayırmak istediğin her renkli bölge için aşağıdan bir kesim ekle.</div>`;
     h += D.kesimler.map(kesimHTML).join('');
-    h += `<div class="satir"><button type="button" class="btn" id="ekleDuz">+ Düz kesim</button><button type="button" class="btn" id="ekleTikac">+ Tıkaç (cam, rozet)</button><button type="button" class="btn" id="ekleKanat">+ Kanat (4 tık)</button><button type="button" class="btn" id="ekleBolge">+ Akıllı seçim (renk / kenar)</button></div></div>`;
-    h += `<div class="bolum"><h2>Boya/Çizgi ile Ayır</h2>
-      <div class="not">Astronot + roket + bulut gibi birbirine bitişik, <b>bağımsız</b> iki gövdeyi (klik/pim gerekmeyen, zaten yapıştırılacak veya ayrı basılacak parçaları) tamamen birbirinden ayırır. Fırça/Çizgi ile bir tarafı bir renk, öbür tarafı zıt renk yap (ya da sadece Çizgi ile bir sınır çiz) — düz, <b>bağlantısız</b> bir kapakla ikiye böler. Küçük yerel yamalar (cam, logo, kulak) için bunun yerine "Tıkaç" ya da "Akıllı seçim" kullan.</div>
-      <div class="satir"><button type="button" class="btn ana" id="ekleSinirAyir">+ Boya ile Ayır (bağlantısız)</button></div></div>`;
+    h += `<details class="ekle-menu"><summary class="btn ana">+ Kesim ekle</summary><div class="liste" role="menu">
+      <button type="button" class="ekle-secenek" id="ekleDuz" role="menuitem"><i style="background:var(--cut)"></i><span class="ic"><b>Düz kesim</b><span>Burun, taban gibi düz bir çizgiden ayrılan yerler</span></span></button>
+      <button type="button" class="ekle-secenek" id="ekleTikac" role="menuitem"><i style="background:var(--accent)"></i><span class="ic"><b>Tıkaç</b><span>Cam, logo, rozet gibi gövdeye gömülü küçük parçalar</span></span></button>
+      <button type="button" class="ekle-secenek" id="ekleKanat" role="menuitem"><i style="background:var(--accent)"></i><span class="ic"><b>Kanat</b><span>İnce, düz çıkıntılar: kanat, kulak, pervane (4 tıkla çizilir)</span></span></button>
+      <button type="button" class="ekle-secenek" id="ekleBolge" role="menuitem"><i style="background:var(--accent)"></i><span class="ic"><b>Akıllı seçim</b><span>Renge ya da keskin kenara göre bölge seç, oradan tıkaç çıkar</span></span></button>
+      <button type="button" class="ekle-secenek" id="ekleSinirAyir" role="menuitem"><i style="background:var(--warn)"></i><span class="ic"><b>Boya/Çizgi ile Ayır</b><span>Birbirine bitişik, bağımsız iki gövdeyi (ör. astronot + roket) bağlantısız ayırır</span></span></button>
+    </div></details></div>`;
     h += `<details class="bolum"><summary>Toleranslar (parçalar sıkı/gevşek gelirse)</summary><div class="izgara">
       ${sayiAlan('t_yan', 'Yan boşluk', D.ayar.boslukYan, 0, 0.6, 0.01)}${sayiAlan('t_der', 'Dip boşluk', D.ayar.boslukDerinlik, 0, 0.6, 0.01)}${sayiAlan('t_pim', 'Pim boşluğu', D.ayar.boslukPim, 0, 0.6, 0.01)}</div></details>`;
     if (D.hata) h += `<div class="hata" role="alert">${esc(D.hata)}</div>`;
@@ -1090,6 +1115,27 @@ function sonucCiz() {
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { Gor.yenile(); onizleme(); });
   new MutationObserver(() => { Gor.yenile(); onizleme(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 })();
+
+// ---------------------------------------------------------------- tema (koyu/açık), varsayılan koyu
+(() => {
+  const ANAHTAR = 'parcala_tema';
+  const uygula = tema => {
+    document.documentElement.setAttribute('data-theme', tema);
+    $('#temaAy').hidden = tema !== 'dark'; $('#temaGun').hidden = tema === 'dark';
+    $('#temaBtn').title = tema === 'dark' ? 'Açık temaya geç' : 'Koyu temaya geç';
+  };
+  let kayitli; try { kayitli = localStorage.getItem(ANAHTAR); } catch (e) { kayitli = null; }
+  uygula(kayitli === 'light' ? 'light' : 'dark');   // kayıt yoksa (ilk açılış) varsayılan koyu
+  $('#temaBtn').onclick = () => {
+    const yeni = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    uygula(yeni); try { localStorage.setItem(ANAHTAR, yeni); } catch (e) { }
+  };
+})();
+// ---------------------------------------------------------------- açılır menüler: dışına tıklayınca / Esc ile kapat
+document.addEventListener('pointerdown', e => {
+  document.querySelectorAll('details[open].ekle-menu').forEach(d => { if (!d.contains(e.target)) d.open = false; });
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') document.querySelectorAll('details[open].ekle-menu').forEach(d => d.open = false); });
 
 (() => {
   if (!Gor) return;
